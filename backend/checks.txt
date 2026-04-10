@@ -1,0 +1,15 @@
+INFO 2026-04-07 17:51:22,332 core.apps 16012 125077889368192 Firebase Admin SDK initialized successfully.
+INFO 2026-04-07 17:51:22,961 axes.apps 16012 125077889368192 AXES: BEGIN version 8.3.1, blocking by ip_address
+System check identified some issues:
+
+WARNINGS:
+?: (accounts.W001) No SocialApp configured for provider 'apple'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+?: (accounts.W001) No SocialApp configured for provider 'facebook'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+?: (accounts.W001) No SocialApp configured for provider 'google'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+?: (accounts.W001) No SocialApp configured for provider 'microsoft'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+
+System check identified 4 issues (62 silenced).

@@ -1,0 +1,51 @@
+# Backend-specific .gitignore (Django / Python)
+
+# Byte-compiled / optimized files
+__pycache__/
+*.py[cod]
+
+# Environments
+.venv/
+venv/
+env/
+
+# Django local DB
+*.sqlite3
+db.sqlite3
+db.sqlite3.bak
+
+# Media uploads
+media_root/
+property_images/
+*.jpg
+property_videos/
+*.mp4
+profile_images/
+*.jpg
+test_data/
+
+
+# Environment settings
+.env
+
+# Logs
+*.log
+
+# Coverage
+.coverage
+htmlcov/
+coverage/
+
+# Distribution / packaging
+*.egg-info/
+build/
+dist/
+
+# PyCharm
+.idea/
+
+# Custom Additions
+media/
+staticfiles/
+static_root/
+*.json

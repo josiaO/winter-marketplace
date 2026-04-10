@@ -1,0 +1,74 @@
+Creating test database for alias 'default'...
+INFO 2025-12-24 00:08:27,647 features.signals 25794 125402407338240 Auto-syncing features from registry...
+Found 2 test(s).
+Starting feature sync from registry...
+✅ Created: Property Management (PROPERTY_MANAGEMENT)
+✅ Created: Advanced Property Search (ADVANCED_SEARCH)
+✅ Created: Property Analytics (PROPERTY_ANALYTICS)
+⏳ Created: Bulk Property Upload (BULK_UPLOAD)
+✅ Created: Direct Messaging (MESSAGING)
+⏳ Created: Group Conversations (GROUP_CHAT)
+⏳ Created: Video Consultations (VIDEO_CALLS)
+✅ Created: Featured Listings (FEATURED_LISTINGS)
+✅ Created: Virtual Property Tours (VIRTUAL_TOURS)
+✅ Created: Priority Support (PRIORITY_SUPPORT)
+✅ Created: Lead Management (LEAD_MANAGEMENT)
+✅ Created: Automated Reports (AUTOMATED_REPORTS)
+⏳ Created: Client Portal (CLIENT_PORTAL)
+
+✅ Feature sync complete! Synced 13 features.
+System check identified some issues:
+
+WARNINGS:
+?: (accounts.W001) No SocialApp configured for provider 'apple'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+?: (accounts.W001) No SocialApp configured for provider 'facebook'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+?: (accounts.W001) No SocialApp configured for provider 'google'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+?: (accounts.W001) No SocialApp configured for provider 'microsoft'
+	HINT: Create a SocialApp in the Django admin (Social applications) for this provider and attach it to the current Site (SITE_ID). Alternatively set provider credentials via environment variables or configure the provider in settings.SOCIALACCOUNT_PROVIDERS.
+
+System check identified 4 issues (0 silenced).
+INFO 2025-12-24 00:08:30,451 communications.notification_service 25794 125402407338240 No device tokens found for user agent
+FINFO 2025-12-24 00:08:32,105 communications.notification_service 25794 125402407338240 No device tokens found for user agent
+INFO 2025-12-24 00:08:32,113 communications.notification_service 25794 125402407338240 No device tokens found for user agent
+INFO 2025-12-24 00:08:32,118 communications.notification_service 25794 125402407338240 No device tokens found for user agent
+INFO 2025-12-24 00:08:32,124 communications.notification_service 25794 125402407338240 No device tokens found for user agent
+INFO 2025-12-24 00:08:32,130 communications.notification_service 25794 125402407338240 No device tokens found for user agent
+F
+======================================================================
+FAIL: test_lead_insights_response_time (insights.tests.test_analytics_performance.AnalyticsPerformanceTest.test_lead_insights_response_time)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/josiamosses/SmartDalali/backend/insights/tests/test_analytics_performance.py", line 79, in test_lead_insights_response_time
+    self.assertEqual(data['avg_response_time_seconds'], 450)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 450
+
+======================================================================
+FAIL: test_optimization_suggestions_queries (insights.tests.test_analytics_performance.AnalyticsPerformanceTest.test_optimization_suggestions_queries)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/josiamosses/SmartDalali/backend/insights/tests/test_analytics_performance.py", line 41, in test_optimization_suggestions_queries
+    with self.assertNumQueries(2):
+         ~~~~~~~~~~~~~~~~~~~~~^^^
+  File "/home/josiamosses/SmartDalali/backend/.venv/lib/python3.13/site-packages/django/test/testcases.py", line 128, in __exit__
+    self.test_case.assertEqual(
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        executed,
+        ^^^^^^^^^
+    ...<9 lines>...
+        ),
+        ^^
+    )
+    ^
+AssertionError: 1 != 2 : 1 queries executed, 2 expected
+Captured queries were:
+1. SELECT "properties_property"."id", "properties_property"."owner_id", "properties_property"."title", "properties_property"."description", "properties_property"."price", "properties_property"."listing_type", "properties_property"."type", "properties_property"."area", "properties_property"."rooms", "properties_property"."bedrooms", "properties_property"."bathrooms", "properties_property"."parking", "properties_property"."year_built", "properties_property"."attributes", "properties_property"."capacity", "properties_property"."status", "properties_property"."city", "properties_property"."adress", "properties_property"."latitude", "properties_property"."longitude", "properties_property"."google_place_id", "properties_property"."is_published", "properties_property"."is_paid", "properties_property"."featured_until", "properties_property"."view_count", "properties_property"."created_at", "properties_property"."updated_at", "properties_property"."archived_at", "properties_property"."auto_archive_days", COUNT("properties_mediaproperty"."id") AS "media_count", COUNT("properties_mediaproperty"."id") FILTER (WHERE "properties_mediaproperty"."videos" IS NOT NULL) AS "video_count" FROM "properties_property" LEFT OUTER JOIN "properties_mediaproperty" ON ("properties_property"."id" = "properties_mediaproperty"."property_id") WHERE ("properties_property"."archived_at" IS NULL AND "properties_property"."is_published" AND "properties_property"."owner_id" = 1) GROUP BY "properties_property"."id", "properties_property"."owner_id", "properties_property"."title", "properties_property"."description", "properties_property"."price", "properties_property"."listing_type", "properties_property"."type", "properties_property"."area", "properties_property"."rooms", "properties_property"."bedrooms", "properties_property"."bathrooms", "properties_property"."parking", "properties_property"."year_built", "properties_property"."attributes", "properties_property"."capacity", "properties_property"."status", "properties_property"."city", "properties_property"."adress", "properties_property"."latitude", "properties_property"."longitude", "properties_property"."google_place_id", "properties_property"."is_published", "properties_property"."is_paid", "properties_property"."featured_until", "properties_property"."view_count", "properties_property"."created_at", "properties_property"."updated_at", "properties_property"."archived_at", "properties_property"."auto_archive_days"
+
+----------------------------------------------------------------------
+Ran 2 tests in 3.787s
+
+FAILED (failures=2)
+Destroying test database for alias 'default'...

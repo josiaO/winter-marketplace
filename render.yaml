@@ -1,0 +1,330 @@
+services:
+  # Backend Django Application (standard + HA: avoid free-tier sleep and connection limits)
+  - type: web
+    name: smartdalali-backend
+    runtime: python
+    plan: standard
+    numInstances: 2
+    rootDirectory: backend
+    buildCommand: "./build.sh"
+    # Daphne handles SIGTERM from Render; set a sufficient "graceful shutdown" window in the Render dashboard for in-flight requests.
+    startCommand: "daphne -b 0.0.0.0 -p $PORT backend.asgi:application"
+    healthCheck:
+      path: /health/
+      initialDelaySeconds: 120
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DJANGO_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: SECRET_KEY
+        generateValue: true
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartdalalidb
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: ALLOWED_HOSTS
+        sync: false
+      - key: CSRF_TRUSTED_ORIGINS
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: MESSAGE_ENCRYPTION_KEY
+        generateValue: true
+      - key: FIREBASE_CREDENTIALS_JSON
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: 1.0
+      - key: SENTRY_PROFILES_SAMPLE_RATE
+        value: 1.0
+      - key: SENTRY_SEND_DEFAULT_PII
+        value: false
+      - key: EMAIL_BACKEND
+        value: django.core.mail.backends.smtp.EmailBackend
+      - key: EMAIL_HOST
+        sync: false
+      - key: EMAIL_PORT
+        value: 587
+      - key: EMAIL_USE_TLS
+        value: true
+      - key: EMAIL_HOST_USER
+        sync: false
+      - key: EMAIL_HOST_PASSWORD
+        sync: false
+      - key: DEFAULT_FROM_EMAIL
+        sync: false
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: ACCOUNT_EMAIL_VERIFICATION
+        value: optional
+      - key: SOCIALACCOUNT_EMAIL_VERIFICATION
+        value: optional
+      - key: SOCIAL_GOOGLE_CLIENT_ID
+        sync: false
+      - key: SOCIAL_GOOGLE_SECRET
+        sync: false
+      - key: SOCIAL_FACEBOOK_CLIENT_ID
+        sync: false
+      - key: SOCIAL_FACEBOOK_SECRET
+        sync: false
+      - key: SOCIAL_MICROSOFT_CLIENT_ID
+        sync: false
+      - key: SOCIAL_MICROSOFT_SECRET
+        sync: false
+      - key: SOCIAL_APPLE_CLIENT_ID
+        sync: false
+      - key: SOCIAL_APPLE_SECRET
+        sync: false
+      - key: AWS_STORAGE_BUCKET_NAME
+        sync: false
+      - key: AWS_S3_REGION_NAME
+        sync: false
+      - key: AWS_S3_CUSTOM_DOMAIN
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: DAR_AFFILIATE_CONSUMER_KEY
+        sync: false
+      - key: DAR_AFFILIATE_CONSUMER_SECRET
+        sync: false
+      - key: DAR_SHORTCODE
+        sync: false
+      - key: DAR_PASSKEY
+        sync: false
+      - key: MPESA_API_BASE
+        value: https://api.safaricom.co.ke
+      - key: MPESA_CALLBACK_URL
+        sync: false
+      - key: TWILIO_ACCOUNT_SID
+        sync: false
+      - key: TWILIO_AUTH_TOKEN
+        sync: false
+      - key: TWILIO_PHONE_NUMBER
+        sync: false
+      - key: AI_API_KEY
+        sync: false
+      # Optional: match web if you use a non-default broker (defaults use REDIS_URL in code — set explicitly if needed)
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      # Explicit: production defaults to async escrow webhooks (requires escrow webhook worker).
+      - key: ESCROW_WEBHOOK_ASYNC
+        value: "true"
+
+  # Celery: default queue only (emails, reconciliation, beat-triggered jobs) — keeps webhook latency isolated
+  - type: worker
+    name: smartdalali-celery-default-worker
+    runtime: python
+    plan: standard
+    rootDirectory: backend
+    buildCommand: "./build.sh"
+    startCommand: "celery -A backend worker -Q celery -c 4 -l INFO --soft-time-limit=280 --time-limit=300"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DJANGO_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: SECRET_KEY
+        fromService:
+          name: smartdalali-backend
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartdalalidb
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: MESSAGE_ENCRYPTION_KEY
+        fromService:
+          name: smartdalali-backend
+          type: web
+          envVarKey: MESSAGE_ENCRYPTION_KEY
+
+  # Celery: dedicated Selcom / gateway webhook execution (must match ESCROW_WEBHOOK_ASYNC + task queue)
+  - type: worker
+    name: smartdalali-celery-webhook-worker
+    runtime: python
+    plan: standard
+    rootDirectory: backend
+    buildCommand: "./build.sh"
+    startCommand: "celery -A backend worker -Q escrow_webhooks -c 2 -l INFO --soft-time-limit=55 --time-limit=60"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DJANGO_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: SECRET_KEY
+        fromService:
+          name: smartdalali-backend
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartdalalidb
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: MESSAGE_ENCRYPTION_KEY
+        fromService:
+          name: smartdalali-backend
+          type: web
+          envVarKey: MESSAGE_ENCRYPTION_KEY
+
+  # Celery beat (periodic tasks: unpaid orders, reservations, escrow release, reconciliation)
+  - type: worker
+    name: smartdalali-celery-beat
+    runtime: python
+    plan: standard
+    rootDirectory: backend
+    buildCommand: "./build.sh"
+    startCommand: "celery -A backend beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.0
+      - key: DJANGO_ENV
+        value: production
+      - key: DEBUG
+        value: false
+      - key: SECRET_KEY
+        fromService:
+          name: smartdalali-backend
+          type: web
+          envVarKey: SECRET_KEY
+      - key: DATABASE_URL
+        fromDatabase:
+          name: smartdalalidb
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: CELERY_BROKER_URL
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: CELERY_RESULT_BACKEND
+        fromService:
+          type: redis
+          name: smartdalali-redis
+          property: connectionString
+      - key: MESSAGE_ENCRYPTION_KEY
+        fromService:
+          name: smartdalali-backend
+          type: web
+          envVarKey: MESSAGE_ENCRYPTION_KEY
+
+  # Frontend Static Site
+  - type: web
+    name: smartdalali-1
+    runtime: node
+    plan: free
+    rootDirectory: frontend
+    buildCommand: "npm install && npm run build"
+    staticPublishPath: ./dist
+    envVars:
+      - key: NODE_VERSION
+        value: 20.11.0
+      - key: VITE_API_URL_DEPLOY
+        fromService:
+          type: web
+          name: smartdalali-backend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: VITE_WS_URL_DEPLOY
+        fromService:
+          type: web
+          name: smartdalali-backend
+          envVarKey: RENDER_EXTERNAL_URL
+      - key: VITE_FIREBASE_API_KEY
+        sync: false
+      - key: VITE_FIREBASE_AUTH_DOMAIN
+        sync: false
+      - key: VITE_FIREBASE_PROJECT_ID
+        sync: false
+      - key: VITE_FIREBASE_STORAGE_BUCKET
+        sync: false
+      - key: VITE_FIREBASE_MESSAGING_SENDER_ID
+        sync: false
+      - key: VITE_FIREBASE_APP_ID
+        sync: false
+      - key: VITE_FIREBASE_MEASUREMENT_ID
+        sync: false
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: VITE_GA_MEASUREMENT_ID
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+databases:
+  - name: smartdalalidb
+    databaseName: smartdalali
+    plan: standard
+    user: smartdalali
+
+  - name: smartdalali-redis
+    plan: standard
+    # Evict LRU keys when full so broker/cache writes do not hard-fail (tune if you need persistence guarantees)
+    maxmemoryPolicy: allkeys-lru

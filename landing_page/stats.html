@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SmartDalali — Landing login clicks</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,700;9..144,900&display=swap"
+    rel="stylesheet" />
+  <style>
+    :root {
+      --ink: #1a1208;
+      --earth: #c95f2a;
+      --cream: #faf6f0;
+      --border: #e8e0d4;
+      --muted: #8a7968;
+      --white: #fff;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'DM Sans', system-ui, sans-serif;
+      background: var(--cream);
+      color: var(--ink);
+      line-height: 1.5;
+      min-height: 100dvh;
+      padding: 24px 16px 48px;
+    }
+
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: clamp(1.5rem, 4vw, 2rem);
+      font-weight: 900;
+      letter-spacing: -0.02em;
+      margin-bottom: 8px;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 0.9375rem;
+      margin-bottom: 28px;
+      max-width: 640px;
+    }
+
+    .panel {
+      background: var(--white);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 20px 24px;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 24px rgba(26, 18, 8, .06);
+    }
+
+    label {
+      display: block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    input {
+      width: 100%;
+      font-family: inherit;
+      font-size: 0.9375rem;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1.5px solid var(--border);
+      margin-bottom: 14px;
+    }
+
+    input:focus {
+      outline: 2px solid rgba(201, 95, 42, .35);
+      border-color: var(--earth);
+    }
+
+    .row {
+      display: grid;
+      gap: 14px;
+    }
+
+    @media (min-width: 560px) {
+      .row {
+        grid-template-columns: 1fr 1fr;
+        align-items: end;
+      }
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 8px;
+    }
+
+    button {
+      font-family: inherit;
+      font-weight: 600;
+      font-size: 0.9375rem;
+      padding: 10px 20px;
+      border-radius: 999px;
+      border: none;
+      cursor: pointer;
+      background: var(--earth);
+      color: #fff;
+      transition: transform .15s, box-shadow .15s;
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 16px rgba(201, 95, 42, .35);
+    }
+
+    button.secondary {
+      background: var(--ink);
+    }
+
+    .stat-big {
+      font-family: 'Fraunces', Georgia, serif;
+      font-size: 2.5rem;
+      font-weight: 900;
+      color: var(--earth);
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.8125rem;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .err {
+      color: #b42318;
+      font-size: 0.875rem;
+      margin-top: 8px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.8125rem;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    th {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    code {
+      font-size: 0.8em;
+      background: var(--cream);
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .mono {
+      font-family: ui-monospace, monospace;
+      font-size: 0.75rem;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <h1>Login click insights</h1>
+    <p class="sub">Tracks clicks on <strong>Log in</strong> and other CTAs that send visitors to the app sign-in page.
+      Each row is a short fingerprint (not a name): browser or OS summary plus a stable visitor token derived on the
+      server. Set <code>LANDING_LOGIN_STATS_SECRET</code> in <code>apps/frontend/.env.local</code> and restart the
+      Next.js dev server. Open this file over <code>http://</code> (e.g. <code>npx serve landing_page</code>) if your
+      browser still blocks requests from a <code>file://</code> tab.</p>
+
+    <div class="panel">
+      <div class="row">
+        <div>
+          <label for="base">Frontend base URL</label>
+          <input id="base" type="url" placeholder="http://localhost:3000" value="http://localhost:3000" />
+        </div>
+        <div>
+          <label for="secret">Stats secret</label>
+          <input id="secret" type="password" autocomplete="current-password" placeholder="LANDING_LOGIN_STATS_SECRET" />
+        </div>
+      </div>
+      <div class="actions">
+        <button type="button" id="load">Load now</button>
+        <button type="button" id="toggleAuto" class="secondary">Auto-refresh: off</button>
+      </div>
+      <p id="error" class="err" hidden></p>
+    </div>
+
+    <div class="panel">
+      <div class="stat-big" id="total">—</div>
+      <div class="stat-label">Events stored (most recent 500 on server)</div>
+    </div>
+
+    <div class="panel" style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr>
+            <th>Time (UTC)</th>
+            <th>Device / browser</th>
+            <th>Visitor token</th>
+            <th>Referrer</th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr>
+            <td colspan="4" style="color:var(--muted)">Enter your secret and load.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const baseEl = $('base');
+    const secretEl = $('secret');
+    const tbody = $('tbody');
+    const totalEl = $('total');
+    const errEl = $('error');
+    let autoId = null;
+
+    function showErr(msg) {
+      errEl.hidden = !msg;
+      errEl.textContent = msg || '';
+    }
+
+    async function loadStats() {
+      showErr('');
+      const base = (baseEl.value || '').replace(/\/$/, '');
+      const secret = (secretEl.value || '').trim();
+      if (!base) {
+        showErr('Enter the frontend base URL.');
+        return;
+      }
+      if (!secret) {
+        showErr('Enter the same secret as LANDING_LOGIN_STATS_SECRET.');
+        return;
+      }
+      const url = base + '/api/landing/login-click/stats?secret=' + encodeURIComponent(secret);
+      try {
+        const res = await fetch(url);
+        const data = await res.json().catch(function () { return {}; });
+        if (!res.ok) {
+          showErr(data.error || ('HTTP ' + res.status));
+          return;
+        }
+        totalEl.textContent = String(data.total != null ? data.total : 0);
+        const rows = Array.isArray(data.recent) ? data.recent : [];
+        tbody.innerHTML = '';
+        if (rows.length === 0) {
+          tbody.innerHTML = '<tr><td colspan="4" style="color:var(--muted)">No clicks recorded yet.</td></tr>';
+          return;
+        }
+        rows.forEach(function (r) {
+          const tr = document.createElement('tr');
+          const ref = (r.referrer || '').replace(/</g, '&lt;');
+          tr.innerHTML =
+            '<td class="mono">' + (r.at || '').replace('T', ' ').slice(0, 19) + '</td>' +
+            '<td>' + escapeHtml(r.summary || '') + '</td>' +
+            '<td class="mono">' + escapeHtml(r.visitorKey || '') + '</td>' +
+            '<td class="mono" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + escapeAttr(r.referrer || '') + '">' + (ref ? ref : '—') + '</td>';
+          tbody.appendChild(tr);
+        });
+      } catch (e) {
+        const msg = e && typeof e === 'object' && 'message' in e ? String((e).message) : String(e);
+        showErr('Request failed (' + msg + '). Check the base URL, that Next.js is running, and try opening this page via http:// instead of file://.');
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    function escapeAttr(s) {
+      return escapeHtml(s).replace(/'/g, '&#39;');
+    }
+
+    $('load').addEventListener('click', loadStats);
+
+    $('toggleAuto').addEventListener('click', function () {
+      if (autoId) {
+        clearInterval(autoId);
+        autoId = null;
+        this.textContent = 'Auto-refresh: off';
+        return;
+      }
+      autoId = setInterval(loadStats, 15000);
+      this.textContent = 'Auto-refresh: on (15s)';
+      loadStats();
+    });
+
+    try {
+      var saved = localStorage.getItem('sd-landing-stats-base');
+      if (saved) baseEl.value = saved;
+    } catch (e) { }
+    baseEl.addEventListener('change', function () {
+      try {
+        localStorage.setItem('sd-landing-stats-base', baseEl.value);
+      } catch (e) { }
+    });
+  </script>
+</body>
+
+</html>

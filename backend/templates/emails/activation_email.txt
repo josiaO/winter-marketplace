@@ -1,0 +1,5 @@
+Welcome {{ username }}!
+
+Thank you for signing up.
+Your activation code is: {{ code }}
+Activate here: {{ activation_link }}

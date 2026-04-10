@@ -1,0 +1,10 @@
+.git
+node_modules
+.next
+out
+dist
+build
+*.min.js
+*.min.css
+public/
+coverage/

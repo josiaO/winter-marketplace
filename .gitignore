@@ -1,0 +1,63 @@
+# Documentation (keep repo-specific; adjust if you version docs)
+docs/
+
+# Media / uploads
+media_root/
+*.jpg
+media/
+static_root/
+
+# Node / Next / Turbo
+node_modules/
+.next/
+.turbo/
+out/
+dist/
+build/
+*.tsbuildinfo
+
+# Logs & coverage
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+coverage/
+.nyc_output/
+
+# Environment — never commit secrets
+.env
+.env.local
+.env.*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Python / Django
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.sqlite3
+db.sqlite3
+.pytest_cache/
+
+# Secrets & credentials (specific patterns — do NOT ignore all *.json)
+*.pem
+google-services.json
+**/serviceAccount*.json
+*credentials*.json
+
+# Misc
+*.pdf
+*.docx

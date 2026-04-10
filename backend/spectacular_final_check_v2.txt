@@ -1,0 +1,36 @@
+Traceback (most recent call last):
+  File "/home/josiamosses/SmartDalali/backend/manage.py", line 22, in <module>
+    main()
+  File "/home/josiamosses/SmartDalali/backend/manage.py", line 18, in main
+    execute_from_command_line(sys.argv)
+  File "/home/josiamosses/SmartDalali/backend/.venv/lib/python3.12/site-packages/django/core/management/__init__.py", line 443, in execute_from_command_line
+    utility.execute()
+  File "/home/josiamosses/SmartDalali/backend/.venv/lib/python3.12/site-packages/django/core/management/__init__.py", line 417, in execute
+    django.setup()
+  File "/home/josiamosses/SmartDalali/backend/.venv/lib/python3.12/site-packages/django/__init__.py", line 24, in setup
+    apps.populate(settings.INSTALLED_APPS)
+  File "/home/josiamosses/SmartDalali/backend/.venv/lib/python3.12/site-packages/django/apps/registry.py", line 116, in populate
+    app_config.import_models()
+  File "/home/josiamosses/SmartDalali/backend/.venv/lib/python3.12/site-packages/django/apps/config.py", line 269, in import_models
+    self.models_module = import_module(models_module_name)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib/python3.12/importlib/__init__.py", line 90, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1387, in _gcd_import
+  File "<frozen importlib._bootstrap>", line 1360, in _find_and_load
+  File "<frozen importlib._bootstrap>", line 1331, in _find_and_load_unlocked
+  File "<frozen importlib._bootstrap>", line 935, in _load_unlocked
+  File "<frozen importlib._bootstrap_external>", line 995, in exec_module
+  File "<frozen importlib._bootstrap>", line 488, in _call_with_frames_removed
+  File "/home/josiamosses/SmartDalali/backend/core/models/__init__.py", line 1, in <module>
+    from .base import BaseModel, BaseListing
+  File "/home/josiamosses/SmartDalali/backend/core/models/base.py", line 15, in <module>
+    from .listing import BaseListing  # noqa: E402, F401
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/josiamosses/SmartDalali/backend/core/models/listing.py", line 7, in <module>
+    from ..constants import LISTING_STATUS_CHOICES
+  File "/home/josiamosses/SmartDalali/backend/core/constants.py", line 5
+    ('pending', Pending review),
+                ^^^^^^^^^^^^^^
+SyntaxError: invalid syntax. Perhaps you forgot a comma?

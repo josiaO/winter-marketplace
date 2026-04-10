@@ -1,0 +1,49 @@
+apps/frontend/src/components/blocks/seller-dashboard.tsx(5,30): error TS2307: Cannot find module '@/store' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(6,115): error TS2307: Cannot find module '@/hooks' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(9,32): error TS2307: Cannot find module '@/constants/dashboard' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(10,58): error TS2307: Cannot find module '@repo/ui/components/card' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(11,24): error TS2307: Cannot find module '@repo/ui/components/button' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(12,23): error TS2307: Cannot find module '@repo/ui/components/badge' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(13,23): error TS2307: Cannot find module '@repo/ui/components/input' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(14,23): error TS2307: Cannot find module '@repo/ui/components/label' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(15,26): error TS2307: Cannot find module '@repo/ui/components/textarea' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(16,58): error TS2307: Cannot find module '@repo/ui/components/tabs' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(17,79): error TS2307: Cannot find module '@repo/ui/components/select' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(18,99): error TS2307: Cannot find module '@repo/ui/components/dialog' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(19,26): error TS2307: Cannot find module '@repo/ui/components/progress' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(27,23): error TS2307: Cannot find module '@repo/ui/hooks/use-toast' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(31,35): error TS2307: Cannot find module '@/components/orders/seller-order-update' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(182,36): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(182,43): error TS2307: Cannot find module '@/lib/services/api' or its corresponding type declarations.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(1260,34): error TS2322: Type 'unknown' is not assignable to type 'Key'.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(1261,63): error TS2322: Type 'unknown' is not assignable to type 'string | StaticImport'.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(1439,57): error TS2339: Property 'size' does not exist on type 'unknown'.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(1443,90): error TS2339: Property 'name' does not exist on type 'unknown'.
+apps/frontend/src/components/blocks/seller-dashboard.tsx(1451,83): error TS2554: Expected 1 arguments, but got 2.
+apps/frontend/src/views/listing-detail-view.tsx(6,29): error TS2307: Cannot find module '@/store' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(7,44): error TS2307: Cannot find module '@/store' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(10,29): error TS2307: Cannot find module '@repo/ui/utils' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(11,24): error TS2307: Cannot find module '@repo/ui/components/button' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(12,23): error TS2307: Cannot find module '@repo/ui/components/badge' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(13,22): error TS2307: Cannot find module '@repo/ui/components/card' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(15,23): error TS2307: Cannot find module '@repo/ui/hooks/use-toast' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(16,30): error TS2307: Cannot find module '@/hooks' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(17,99): error TS2307: Cannot find module '@repo/ui/components/dialog' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(18,38): error TS2307: Cannot find module '@/components/listings/listing-report-trigger' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(19,35): error TS2307: Cannot find module '@/components/listings/user-report-trigger' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(20,46): error TS2307: Cannot find module '@/components/listings/listing-specifications-section' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(291,50): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+apps/frontend/src/views/listing-detail-view.tsx(291,57): error TS2307: Cannot find module '@/lib/services/api' or its corresponding type declarations.
+apps/frontend/src/views/listing-detail-view.tsx(434,55): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+apps/frontend/src/views/listing-detail-view.tsx(434,62): error TS2307: Cannot find module '@/lib/services/api' or its corresponding type declarations.
+packages/lib/src/api/api.ts(101,36): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/api/client.ts(157,17): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/api/client.ts(188,56): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/api/client.ts(270,62): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/api/client.ts(288,86): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/api/client.ts(289,56): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/api/client.ts(321,17): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/api/client.ts(333,13): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/store/auth-store.ts(37,21): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/store/auth.ts(50,32): error TS1323: Dynamic imports are only supported when the '--module' flag is set to 'es2020', 'es2022', 'esnext', 'commonjs', 'amd', 'system', 'umd', 'node16', 'node18', 'node20', or 'nodenext'.
+packages/lib/src/utils/listing.ts(9,54): error TS18047: 'c' is possibly 'null'.
