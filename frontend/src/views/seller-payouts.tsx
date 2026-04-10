@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -27,25 +29,25 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate, formatDateTime } from '@/lib/helpers';
 import type { Payout, PaginatedResponse } from '@/types/api';
 
 export function SellerPayoutsPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!user?.is_seller) {
       toast.error('You must be a seller to view payouts.');
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
 
@@ -61,7 +63,7 @@ export function SellerPayoutsPage() {
       }
     }
     loadPayouts();
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   const summary = useMemo(() => {
     const totalEarned = payouts.reduce((sum, p) => sum + p.net_amount, 0);
@@ -164,7 +166,7 @@ export function SellerPayoutsPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'seller-dashboard' })}
+            onClick={() => router.push(routes.sellerDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Back to Dashboard

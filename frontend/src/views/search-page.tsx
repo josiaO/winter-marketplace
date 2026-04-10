@@ -1,6 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { routes } from '@/lib/routes';
+import { useState, useEffect, useLayoutEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Search,
@@ -46,9 +48,14 @@ const CONDITION_OPTIONS = [
   { value: 'refurbished', label: 'Refurbished' },
 ];
 
+const PAGE_SIZE = 24;
+
 export function SearchPage() {
-  const { currentView, navigate, searchQuery, setSearchQuery } = useUIStore();
-  const query = currentView.view === 'search' ? currentView.query : searchQuery;
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { searchQuery, setSearchQuery } = useUIStore();
+  const urlQ = searchParams.get('q');
+  const query = urlQ !== null ? urlQ : searchQuery;
 
   const [results, setResults] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -66,39 +73,50 @@ export function SearchPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [searchInput, setSearchInput] = useState(query);
 
-  const fetchResults = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params: Record<string, string | number | boolean | null | undefined> = {
-        q: query || undefined,
-        category: selectedCategory || undefined,
-        condition: selectedCondition || undefined,
-        min_price: priceMin ? Number(priceMin) : undefined,
-        max_price: priceMax ? Number(priceMax) : undefined,
-        ordering: selectedSort,
-        page,
-      };
-
-      const res = await api.listings.search(params);
-      setResults(res.results || []);
-      setTotalCount(res.count || 0);
-      setHasMore(!!res.next);
-    } catch {
-      toast.error('Failed to fetch results');
-      setResults([]);
-    } finally {
-      setIsLoading(false);
-    }
-  }, [query, page, selectedSort, selectedCategory, selectedCondition, priceMin, priceMax]);
-
-  // Reset page on filter change
-  useEffect(() => {
+  useLayoutEffect(() => {
     setPage(1);
   }, [query, selectedSort, selectedCategory, selectedCondition, priceMin, priceMax]);
 
   useEffect(() => {
-    fetchResults();
-  }, [fetchResults]);
+    let cancelled = false;
+    setIsLoading(true);
+    (async () => {
+      try {
+        const limit = PAGE_SIZE;
+        const offset = (page - 1) * limit;
+        const params: Record<string, string | number | boolean | null | undefined> = {
+          search: query.trim() || undefined,
+          category: selectedCategory || undefined,
+          condition: selectedCondition || undefined,
+          min_price: priceMin ? Number(priceMin) : undefined,
+          max_price: priceMax ? Number(priceMax) : undefined,
+          ordering: selectedSort,
+          limit,
+          offset,
+        };
+
+        const res = await api.listings.list(params);
+        if (cancelled) return;
+        const rows = res.results || [];
+        setTotalCount(res.count || 0);
+        setHasMore(!!res.next);
+        setResults((prev) => (page === 1 ? rows : [...prev, ...rows]));
+      } catch {
+        if (cancelled) return;
+        toast.error('Failed to fetch results');
+        if (page === 1) setResults([]);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [query, page, selectedSort, selectedCategory, selectedCondition, priceMin, priceMax]);
+
+  useEffect(() => {
+    setSearchInput(query);
+  }, [query]);
 
   // Fetch categories for filter dropdown
   useEffect(() => {
@@ -113,15 +131,14 @@ export function SearchPage() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchInput.trim()) {
-      setSearchQuery(searchInput.trim());
-      navigate({ view: 'search', query: searchInput.trim() });
-    }
+    const trimmed = searchInput.trim();
+    setSearchQuery(trimmed);
+    router.push(routes.marketplace(trimmed));
   };
 
   const handleProductSelect = useCallback(
-    (listing: Listing) => navigate({ view: 'product', id: String(listing.id) }),
-    [navigate]
+    (listing: Listing) => router.push(routes.product(String(listing.id))),
+    [router]
   );
 
   const clearFilters = () => {
@@ -244,7 +261,7 @@ export function SearchPage() {
         <div className="flex items-center justify-between">
           <div>
             {isLoading ? (
-              <span className="text-sm text-muted-foreground">Searching...</span>
+              <span className="text-sm text-muted-foreground">Loading...</span>
             ) : (
               <p className="text-sm text-muted-foreground">
                 {query ? (

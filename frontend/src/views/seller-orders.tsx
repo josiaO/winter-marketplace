@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -34,7 +36,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { canAccessSellerPortal } from '@/lib/auth-roles';
 import { api } from '@/lib/api-client';
 import {
@@ -51,6 +53,7 @@ import {
   commerceOrderItemLineTotal,
 } from '@/lib/helpers';
 import { ApiClientError } from '@/types/api';
+import { EmptyState } from '@/components/smartdalali/empty-state';
 import type { Order, PaginatedResponse } from '@/types/api';
 
 const STATUS_TABS = [
@@ -59,12 +62,13 @@ const STATUS_TABS = [
   { value: 'confirmed', label: 'Confirmed', icon: CheckCircle2 },
   { value: 'processing', label: 'Processing', icon: Package },
   { value: 'shipped', label: 'Shipped', icon: Truck },
+  { value: 'arrived', label: 'Arrived', icon: MapPin },
   { value: 'delivered', label: 'Delivered', icon: CheckCircle2 },
   { value: 'cancelled', label: 'Cancelled', icon: XCircle },
 ];
 
 export function SellerOrdersPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -72,6 +76,9 @@ export function SellerOrdersPage() {
   const [expandedOrder, setExpandedOrder] = useState<number | null>(null);
   const [shipDialogOrder, setShipDialogOrder] = useState<Order | null>(null);
   const [trackingNumber, setTrackingNumber] = useState('');
+  const [carrier, setCarrier] = useState('');
+  const [shipmentVideo, setShipmentVideo] = useState<File | null>(null);
+  const [shipmentImages, setShipmentImages] = useState<File[]>([]);
   const [isShipping, setIsShipping] = useState(false);
 
   const loadOrders = useCallback(async () => {
@@ -91,12 +98,12 @@ export function SellerOrdersPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!canAccessSellerPortal(user)) {
       toast.error('You must be a seller to view orders.');
-      navigate({ view: 'seller-register' });
+      router.push(routes.sellerRegister());
       return;
     }
 
@@ -122,10 +129,16 @@ export function SellerOrdersPage() {
     try {
       await api.commerce.shipOrder(shipDialogOrder.id, {
         tracking_number: trackingNumber.trim(),
+        carrier: carrier.trim() || undefined,
+        shipment_video: shipmentVideo || undefined,
+        shipment_images: shipmentImages.length > 0 ? shipmentImages : undefined,
       });
       toast.success('Order marked as shipped!');
       setShipDialogOrder(null);
       setTrackingNumber('');
+      setCarrier('');
+      setShipmentVideo(null);
+      setShipmentImages([]);
       await loadOrders();
     } catch (err: unknown) {
       const message =
@@ -140,8 +153,27 @@ export function SellerOrdersPage() {
     }
   };
 
+  const handleMarkArrived = async (orderId: number) => {
+    setIsLoading(true);
+    try {
+      await api.commerce.markArrived(orderId);
+      toast.success('Order marked as arrived at pickup point!');
+      await loadOrders();
+    } catch (err: unknown) {
+      const message =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to mark as arrived.';
+      toast.error(message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const canShip = (order: Order) =>
     ['pending', 'confirmed', 'processing'].includes(order.status);
+
+  const canMarkArrived = (order: Order) => order.status === 'shipped';
 
   if (!isAuthenticated || !user) return null;
 
@@ -210,24 +242,15 @@ export function SellerOrdersPage() {
                   ))}
                 </div>
               ) : filteredOrders.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                >
-                  <Card className="border-0 shadow-sm">
-                    <CardContent className="py-16 text-center">
-                      <PackageOpen className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                      <h3 className="font-semibold text-foreground text-lg mb-1">
-                        No {tab.value !== 'all' ? tab.label.toLowerCase() : ''} orders
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {tab.value === 'all'
-                          ? 'Orders will appear here when customers purchase your products.'
-                          : `You don't have any ${tab.label.toLowerCase()} orders at the moment.`}
-                      </p>
-                    </CardContent>
-                  </Card>
-                </motion.div>
+                <EmptyState
+                  icon={PackageOpen}
+                  title={`No ${activeTab !== 'all' ? tab.label.toLowerCase() : ''} orders`}
+                  description={
+                    tab.value === 'all'
+                      ? 'Orders will appear here when customers purchase your products.'
+                      : `You don't have any ${tab.label.toLowerCase()} orders at the moment.`
+                  }
+                />
               ) : (
                 <div className="space-y-3">
                   <AnimatePresence mode="popLayout">
@@ -294,6 +317,20 @@ export function SellerOrdersPage() {
                                     >
                                       <Send className="w-3.5 h-3.5" />
                                       Mark Shipped
+                                    </Button>
+                                  )}
+                                  {canMarkArrived(order) && (
+                                    <Button
+                                      size="sm"
+                                      variant="secondary"
+                                      className="gap-1.5 text-xs shrink-0 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border-indigo-200"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleMarkArrived(order.id);
+                                      }}
+                                    >
+                                      <MapPin className="w-3.5 h-3.5" />
+                                      Mark Arrived
                                     </Button>
                                   )}
                                   <Button
@@ -452,6 +489,9 @@ export function SellerOrdersPage() {
             if (!open) {
               setShipDialogOrder(null);
               setTrackingNumber('');
+              setCarrier('');
+              setShipmentVideo(null);
+              setShipmentImages([]);
             }
           }}
         >
@@ -463,15 +503,58 @@ export function SellerOrdersPage() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label htmlFor="carrier">Carrier / Method</Label>
+                  <Input
+                    id="carrier"
+                    placeholder="e.g. DHL, Bodaboda"
+                    value={carrier}
+                    onChange={(e) => setCarrier(e.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="trackingNumber">Tracking Number</Label>
+                  <Input
+                    id="trackingNumber"
+                    placeholder="e.g. TRK123456"
+                    value={trackingNumber}
+                    onChange={(e) => setTrackingNumber(e.target.value)}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="trackingNumber">Tracking Number</Label>
+                <Label>Shipment Evidence (Images)</Label>
                 <Input
-                  id="trackingNumber"
-                  placeholder="Enter tracking number (e.g., TRK123456)"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  className="h-11"
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setShipmentImages(files);
+                  }}
+                  className="cursor-pointer"
                 />
+                <p className="text-[10px] text-muted-foreground">
+                  Upload photos of the packaged item and receipt.
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Packing Video (Optional)</Label>
+                <Input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setShipmentVideo(file);
+                  }}
+                  className="cursor-pointer"
+                />
+                <p className="text-[10px] text-muted-foreground">
+                  A short video of you sealing the package.
+                </p>
               </div>
               <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
                 <p className="font-medium text-foreground mb-1">Shipping to:</p>
@@ -485,6 +568,9 @@ export function SellerOrdersPage() {
                 onClick={() => {
                   setShipDialogOrder(null);
                   setTrackingNumber('');
+                  setCarrier('');
+                  setShipmentVideo(null);
+                  setShipmentImages([]);
                 }}
                 disabled={isShipping}
               >

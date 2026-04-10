@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
@@ -35,7 +37,7 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatDate, getInitials } from '@/lib/helpers';
 import type { User as DjangoUser } from '@/types/api';
@@ -51,7 +53,7 @@ interface ProfileFormValues {
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL || '/api/v1';
 
 export function ProfilePage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated, setUser } = useAuthStore();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -87,9 +89,9 @@ export function ProfilePage() {
   // Auth check
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, router]);
 
   const onSubmit = async (data: ProfileFormValues) => {
     setIsSaving(true);
@@ -476,7 +478,7 @@ export function ProfilePage() {
                   <Button
                     variant="outline"
                     className="w-full mt-2 gap-2"
-                    onClick={() => navigate({ view: 'seller-dashboard' })}
+                    onClick={() => router.push(routes.sellerDashboard())}
                   >
                     Go to Seller Dashboard
                   </Button>
@@ -495,7 +497,7 @@ export function ProfilePage() {
                     </p>
                   </div>
                   <Button
-                    onClick={() => navigate({ view: 'seller-register' })}
+                    onClick={() => router.push(routes.sellerRegister())}
                     className="gap-2"
                   >
                     <Store className="w-4 h-4" />

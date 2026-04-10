@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
@@ -40,7 +42,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useAuthStore, useUIStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 
 type FieldType = 'text' | 'long_text' | 'integer' | 'decimal' | 'number' | 'select' | 'boolean' | 'date';
@@ -94,7 +96,7 @@ function flattenTree(cats: CategoryRow[]): Array<{ id: number; name: string; dep
 }
 
 export function AdminCatalogPage() {
-  const navigate = useUIStore((s) => s.navigate);
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -143,10 +145,10 @@ export function AdminCatalogPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   const refreshCategories = async () => {
     setIsLoading(true);

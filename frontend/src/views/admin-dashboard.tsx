@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -43,7 +45,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate, getInitials, getRelativeTime } from '@/lib/helpers';
 import type { AdminStats, GrowthCharts, GrowthChartData } from '@/types/api';
@@ -96,28 +98,19 @@ interface QuickActionDef {
   icon: React.ElementType;
   color: string;
   bg: string;
-  view:
-    | 'admin-users'
-    | 'admin-verifications'
-    | 'admin-listings'
-    | 'admin-reports'
-    | 'admin-disputes'
-    | 'admin-payouts'
-    | 'admin-analytics'
-    | 'admin-plans'
-    | 'admin-catalog';
+  href: string;
 }
 
 const quickActions: QuickActionDef[] = [
-  { label: 'Manage Users', description: 'View and manage all platform users', icon: Users, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40', view: 'admin-users' },
-  { label: 'Verify Sellers', description: 'Review seller verification requests', icon: Shield, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', view: 'admin-verifications' },
-  { label: 'Moderate Listings', description: 'Review and manage marketplace listings', icon: Package, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-950/40', view: 'admin-listings' },
-  { label: 'Catalog', description: 'Manage categories and dynamic fields', icon: Store, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40', view: 'admin-catalog' },
-  { label: 'View Reports', description: 'Handle abuse and fraud reports', icon: AlertTriangle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40', view: 'admin-reports' },
-  { label: 'Disputes', description: 'Resolve order disputes and conflicts', icon: Clock, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40', view: 'admin-disputes' },
-  { label: 'Payouts', description: 'Manage seller payout requests', icon: DollarSign, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', view: 'admin-payouts' },
-  { label: 'Analytics', description: 'View platform performance metrics', icon: BarChart3, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-950/40', view: 'admin-analytics' },
-  { label: 'Plans & Features', description: 'Manage subscription plans', icon: Eye, color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-50 dark:bg-pink-950/40', view: 'admin-plans' },
+  { label: 'Manage Users', description: 'View and manage all platform users', icon: Users, color: 'text-blue-600 dark:text-blue-400', bg: 'bg-blue-50 dark:bg-blue-950/40', href: routes.adminUsers() },
+  { label: 'Verify Sellers', description: 'Review seller verification requests', icon: Shield, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', href: routes.adminVerifications() },
+  { label: 'Moderate Listings', description: 'Review and manage marketplace listings', icon: Package, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-950/40', href: routes.adminListings() },
+  { label: 'Catalog', description: 'Manage categories and dynamic fields', icon: Store, color: 'text-indigo-600 dark:text-indigo-400', bg: 'bg-indigo-50 dark:bg-indigo-950/40', href: routes.adminCatalog() },
+  { label: 'View Reports', description: 'Handle abuse and fraud reports', icon: AlertTriangle, color: 'text-red-600 dark:text-red-400', bg: 'bg-red-50 dark:bg-red-950/40', href: routes.adminReports() },
+  { label: 'Disputes', description: 'Resolve order disputes and conflicts', icon: Clock, color: 'text-amber-600 dark:text-amber-400', bg: 'bg-amber-50 dark:bg-amber-950/40', href: routes.adminDisputes() },
+  { label: 'Payouts', description: 'Manage seller payout requests', icon: DollarSign, color: 'text-emerald-600 dark:text-emerald-400', bg: 'bg-emerald-50 dark:bg-emerald-950/40', href: routes.adminPayouts() },
+  { label: 'Analytics', description: 'View platform performance metrics', icon: BarChart3, color: 'text-teal-600 dark:text-teal-400', bg: 'bg-teal-50 dark:bg-teal-950/40', href: routes.adminAnalytics() },
+  { label: 'Plans & Features', description: 'Manage subscription plans', icon: Eye, color: 'text-pink-600 dark:text-pink-400', bg: 'bg-pink-50 dark:bg-pink-950/40', href: routes.adminPlans() },
 ];
 
 // ---------------------------------------------------------------------------
@@ -137,7 +130,7 @@ function orderStatusColor(status: string) {
 // ---------------------------------------------------------------------------
 
 export function AdminDashboardPage() {
-  const navigate = useUIStore((s) => s.navigate);
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -148,7 +141,7 @@ export function AdminDashboardPage() {
   // ── Auth guard ─────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
 
@@ -169,7 +162,7 @@ export function AdminDashboardPage() {
       }
     }
     loadData();
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   if (!isAuthenticated || !user || user.role !== 'admin') return null;
 
@@ -334,10 +327,10 @@ export function AdminDashboardPage() {
             <CardContent className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
               {quickActions.map((action) => (
                 <Button
-                  key={action.view}
+                  key={action.href}
                   variant="outline"
                   className="justify-start gap-3 h-auto py-3 hover:border-emerald-300 transition-colors"
-                  onClick={() => navigate({ view: action.view })}
+                  onClick={() => router.push(action.href)}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${action.bg}`}>
                     <action.icon className={`w-4 h-4 ${action.color}`} />
@@ -371,7 +364,7 @@ export function AdminDashboardPage() {
                   variant="ghost"
                   size="sm"
                   className="gap-1.5 text-emerald-600 hover:text-emerald-700"
-                  onClick={() => navigate({ view: 'admin-users' })}
+                  onClick={() => router.push(routes.adminUsers())}
                 >
                   View All <ArrowUpRight className="w-3.5 h-3.5" />
                 </Button>
@@ -460,7 +453,7 @@ export function AdminDashboardPage() {
                   variant="ghost"
                   size="sm"
                   className="gap-1.5 text-emerald-600 hover:text-emerald-700"
-                  onClick={() => navigate({ view: 'admin-disputes' })}
+                  onClick={() => router.push(routes.adminDisputes())}
                 >
                   View All <ArrowUpRight className="w-3.5 h-3.5" />
                 </Button>

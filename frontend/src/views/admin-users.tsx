@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -38,9 +40,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatDate, getInitials, getRelativeTime } from '@/lib/helpers';
+import { EmptyState } from '@/components/smartdalali/empty-state';
 import type { User, PaginatedResponse } from '@/types/api';
 
 const PAGE_SIZE = 20;
@@ -71,7 +74,7 @@ function statusBadgeClass(active: boolean) {
 // ---------------------------------------------------------------------------
 
 export function AdminUsersPage() {
-  const navigate = useUIStore((s) => s.navigate);
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -103,11 +106,11 @@ export function AdminUsersPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
     fetchUsers();
-  }, [isAuthenticated, user, navigate, fetchUsers]);
+  }, [isAuthenticated, user, router, fetchUsers]);
 
   // ── Actions ────────────────────────────────────────────────────────────
   const handleToggleSellerStatus = async (id: number) => {
@@ -162,7 +165,7 @@ export function AdminUsersPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'admin-dashboard' })}
+            onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Dashboard
@@ -206,11 +209,11 @@ export function AdminUsersPage() {
                       ))}
                     </div>
                   ) : users.length === 0 ? (
-                    <div className="text-center py-16">
-                      <Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                      <h3 className="font-semibold text-foreground text-lg mb-1">No users found</h3>
-                      <p className="text-sm text-muted-foreground">Try adjusting your search or filter.</p>
-                    </div>
+                    <EmptyState
+                      icon={Users}
+                      title="No users found"
+                      description="Try adjusting your search or filter to find who you're looking for."
+                    />
                   ) : (
                     <>
                       {/* Desktop Table */}

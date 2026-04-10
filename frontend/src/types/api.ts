@@ -307,6 +307,7 @@ export type OrderStatus =
   | 'confirmed'
   | 'processing'
   | 'shipped'
+  | 'arrived'
   | 'delivered'
   | 'completed'
   | 'cancelled'
@@ -378,6 +379,15 @@ export interface Order {
   payment_channel: PaymentChannel | null;
   tracking_number: string | null;
   dispute: Dispute | null;
+  /** Django `OrderSerializer.get_escrow` — engine transaction snapshot (status is uppercase, e.g. HOLD). */
+  escrow?: {
+    id?: string;
+    reference?: string;
+    status?: string;
+    payment_method?: string;
+    amount?: string;
+    currency?: string;
+  } | null;
   transaction: Transaction | null;
   escrow_transaction: Transaction | null;
   payment_url: string | null;
@@ -520,12 +530,19 @@ export type DocumentStatus = 'not_submitted' | 'pending' | 'approved' | 'rejecte
 export interface Verification {
   id: number;
   user: number;
-  id_document: string | null;
-  tin_document: string | null;
-  license_document: string | null;
+  national_id_number: string | null;
+  national_id_front: string | null;
+  national_id_back: string | null;
+  tin_number: string | null;
+  tin_certificate: string | null;
+  business_license_number: string | null;
+  business_license_document: string | null;
   id_status: DocumentStatus;
   tin_status: DocumentStatus;
-  license_status: DocumentStatus;
+  business_license_status: DocumentStatus;
+  is_identity_verified: boolean;
+  verification_date: string | null;
+  reviewer_notes: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -807,4 +824,27 @@ export class ApiClientError extends Error {
     this.detail = error.detail || '';
     this.errors = error.errors || {};
   }
+}
+
+export type SupportRequestStatus = 'pending' | 'in_progress' | 'resolved' | 'closed';
+
+export interface SupportRequest {
+  id: number;
+  user: number;
+  subject: string;
+  message: string;
+  status: SupportRequestStatus;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateSupportRequestPayload {
+  subject: string;
+  message: string;
+}
+
+export interface UpdateSupportRequestPayload {
+  status?: SupportRequestStatus;
+  admin_notes?: string;
 }

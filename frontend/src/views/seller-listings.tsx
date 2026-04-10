@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -35,13 +37,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate } from '@/lib/helpers';
+import { EmptyState } from '@/components/smartdalali/empty-state';
 import type { Listing, PaginatedResponse } from '@/types/api';
 
 export function SellerListingsPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [listings, setListings] = useState<Listing[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -51,12 +54,12 @@ export function SellerListingsPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!user?.is_seller) {
       toast.error('You must be a seller to view listings.');
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
 
@@ -74,7 +77,7 @@ export function SellerListingsPage() {
       }
     }
     loadListings();
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   const filteredListings = useMemo(() => {
     let filtered = listings;
@@ -146,7 +149,7 @@ export function SellerListingsPage() {
               Manage your product listings
             </p>
           </div>
-          <Button className="gap-2 shrink-0" onClick={() => toast.info('Listing editor coming soon!')}>
+          <Button className="gap-2 shrink-0" onClick={() => router.push(routes.sellerListingNew())}>
             <Package className="w-4 h-4" />
             Add New Listing
           </Button>
@@ -247,33 +250,17 @@ export function SellerListingsPage() {
             ))}
           </div>
         ) : filteredListings.length === 0 ? (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-          >
-            <Card className="border-0 shadow-sm">
-              <CardContent className="py-16 text-center">
-                <PackageX className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                <h3 className="font-semibold text-foreground text-lg mb-1">
-                  {searchQuery || statusFilter !== 'all' ? 'No matching listings' : 'No listings yet'}
-                </h3>
-                <p className="text-sm text-muted-foreground max-w-sm mx-auto">
-                  {searchQuery || statusFilter !== 'all'
-                    ? 'Try adjusting your search or filter criteria.'
-                    : 'Start selling by adding your first product listing.'}
-                </p>
-                {!searchQuery && statusFilter === 'all' && (
-                  <Button
-                    className="mt-4 gap-2"
-                    onClick={() => toast.info('Listing editor coming soon!')}
-                  >
-                    <Package className="w-4 h-4" />
-                    Add Your First Listing
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
+          <EmptyState
+            icon={PackageX}
+            title={searchQuery || statusFilter !== 'all' ? 'No matching listings' : 'No listings yet'}
+            description={
+              searchQuery || statusFilter !== 'all'
+                ? 'Try adjusting your search or filter criteria.'
+                : 'Start selling by adding your first product listing.'
+            }
+            actionLabel={!searchQuery && statusFilter === 'all' ? 'Add Your First Listing' : undefined}
+            onAction={!searchQuery && statusFilter === 'all' ? () => router.push(routes.sellerListingCreate()) : undefined}
+          />
         ) : viewMode === 'table' ? (
           <motion.div
             initial={{ opacity: 0 }}
@@ -305,7 +292,7 @@ export function SellerListingsPage() {
                               animate={{ opacity: 1 }}
                               exit={{ opacity: 0 }}
                               className="group cursor-pointer hover:bg-muted/50 border-b last:border-0"
-                              onClick={() => navigate({ view: 'product', id: String(listing.id) })}
+                              onClick={() => router.push(routes.product(String(listing.id)))}
                             >
                               <TableCell className="py-3 px-4">
                                 <div className="w-10 h-10 rounded-lg bg-muted overflow-hidden">
@@ -356,7 +343,7 @@ export function SellerListingsPage() {
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        navigate({ view: 'product', id: String(listing.id) });
+                                        router.push(routes.product(String(listing.id)));
                                       }}
                                     >
                                       <Eye className="w-4 h-4 mr-2" />
@@ -365,7 +352,7 @@ export function SellerListingsPage() {
                                     <DropdownMenuItem
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        toast.info('Edit feature coming soon!');
+                                        router.push(routes.sellerListingEdit(String(listing.id)));
                                       }}
                                     >
                                       <Edit3 className="w-4 h-4 mr-2" />
@@ -416,7 +403,7 @@ export function SellerListingsPage() {
                   >
                     <Card
                       className="border-0 shadow-md shadow-black/5 hover:shadow-lg transition-all cursor-pointer group overflow-hidden"
-                      onClick={() => navigate({ view: 'product', id: String(listing.id) })}
+                      onClick={() => router.push(routes.product(String(listing.id)))}
                     >
                       <div className="aspect-square bg-muted relative overflow-hidden">
                         {imgUrl ? (

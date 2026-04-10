@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -32,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import type { PaymentMethodOption, PaymentChannel } from '@/types/api';
 
@@ -75,7 +77,7 @@ const MOBILE_CHANNELS = [
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function SellerPaymentMethodPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodOption[]>([]);
   const [isLoadingMethods, setIsLoadingMethods] = useState(true);
@@ -99,14 +101,14 @@ export function SellerPaymentMethodPage() {
   // ─── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!user?.is_seller) {
       toast.error('You must be a seller to configure payout methods.');
-      navigate({ view: 'seller-register' });
+      router.push(routes.sellerRegister());
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   // ─── Load payment methods ──────────────────────────────────────────────────
   useEffect(() => {
@@ -192,7 +194,7 @@ export function SellerPaymentMethodPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate({ view: 'seller-dashboard' })}
+              onClick={() => router.push(routes.sellerDashboard())}
               className="shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />

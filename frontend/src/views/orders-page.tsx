@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -14,7 +16,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { EmptyState } from '@/components/smartdalali/empty-state';
 import { OrderStatusBadge } from '@/components/smartdalali/order-status-badge';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate, orderNumberLabel, orderTotalAmount } from '@/lib/helpers';
 import { toast } from 'sonner';
@@ -30,7 +32,7 @@ const ORDER_TABS = [
 ];
 
 export function OrdersPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
 
   const [orders, setOrders] = useState<DjangoOrder[]>([]);
@@ -90,7 +92,7 @@ export function OrdersPage() {
           title="Please login to view orders"
           description="You need to be logged in to view your order history."
           actionLabel="Login"
-          onAction={() => navigate({ view: 'login' })}
+          onAction={() => router.push(routes.login())}
         />
       </div>
     );
@@ -136,7 +138,7 @@ export function OrdersPage() {
                 : `You don't have any ${activeTab} orders.`
             }
             actionLabel="Continue Shopping"
-            onAction={() => navigate({ view: 'home' })}
+            onAction={() => router.push(routes.home())}
           />
         ) : (
           <div className="space-y-4">
@@ -148,7 +150,7 @@ export function OrdersPage() {
                 transition={{ delay: index * 0.05 }}
                 className="border rounded-xl bg-card overflow-hidden hover:shadow-md transition-shadow cursor-pointer"
                 onClick={() =>
-                  navigate({ view: 'order-detail', id: order.id })
+                  router.push(routes.order(String(order.id)))
                 }
               >
                 <div className="p-4 sm:p-5">

@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -30,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate } from '@/lib/helpers';
 import type { Payout, PaginatedResponse } from '@/types/api';
@@ -80,7 +82,7 @@ function PayoutStatusBadge({ status }: { status: Payout['status'] }) {
 }
 
 export function AdminPayoutsPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [allPayouts, setAllPayouts] = useState<Payout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -107,7 +109,7 @@ export function AdminPayoutsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
     fetchPayouts();
@@ -185,7 +187,7 @@ export function AdminPayoutsPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'admin-dashboard' })}
+            onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Back to Dashboard

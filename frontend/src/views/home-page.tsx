@@ -18,12 +18,15 @@ import { Input } from '@/components/ui/input';
 import { CategoryBar } from '@/components/smartdalali/category-bar';
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
+import { useRouter } from 'next/navigation';
 import { useUIStore } from '@/store';
+import { routes } from '@/lib/routes';
 import { api } from '@/lib/api-client';
 import type { Listing, Category, PaginatedResponse } from '@/types/api';
 
 export function HomePage() {
-  const { navigate, searchQuery, setSearchQuery, setSelectedCategory } = useUIStore();
+  const router = useRouter();
+  const { searchQuery, setSearchQuery, setSelectedCategory } = useUIStore();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Listing[]>([]);
@@ -36,21 +39,20 @@ export function HomePage() {
   const handleSearch = useCallback(
     (e: React.FormEvent) => {
       e.preventDefault();
-      if (searchQuery.trim()) {
-        navigate({ view: 'search', query: searchQuery.trim() });
-      }
+      const q = searchQuery.trim();
+      router.push(routes.marketplace(q));
     },
-    [searchQuery, navigate]
+    [searchQuery, router]
   );
 
   const handleCategorySelect = useCallback(
     (slug: string | null) => {
       setSelectedCategory(slug);
       if (slug) {
-        navigate({ view: 'category', slug });
+        router.push(routes.category(slug));
       }
     },
-    [navigate, setSelectedCategory]
+    [router, setSelectedCategory]
   );
 
   useEffect(() => {
@@ -93,9 +95,9 @@ export function HomePage() {
 
   const handleProductSelect = useCallback(
     (listing: Listing) => {
-      navigate({ view: 'product', id: String(listing.id) });
+      router.push(routes.product(String(listing.id)));
     },
-    [navigate]
+    [router]
   );
 
   const fadeInUp = {
@@ -152,7 +154,7 @@ export function HomePage() {
                   key={tag}
                   onClick={() => {
                     setSearchQuery(tag);
-                    navigate({ view: 'search', query: tag });
+                    router.push(routes.marketplace(tag));
                   }}
                   className="px-3 py-1.5 text-sm text-emerald-100 bg-white/15 hover:bg-white/25 rounded-full transition-colors backdrop-blur-sm"
                 >
@@ -194,7 +196,7 @@ export function HomePage() {
             <Button
               variant="ghost"
               className="text-sm font-medium text-primary hover:text-primary/80 rounded-full"
-              onClick={() => navigate({ view: 'search', query: '' })}
+              onClick={() => router.push(routes.marketplace())}
             >
               View All
               <ChevronRight className="w-4 h-4 ml-1" />
@@ -226,7 +228,7 @@ export function HomePage() {
               <Button
                 variant="ghost"
                 className="text-sm font-medium text-primary hover:text-primary/80 rounded-full"
-                onClick={() => navigate({ view: 'search', query: '' })}
+                onClick={() => router.push(routes.marketplace())}
               >
                 View All
                 <ChevronRight className="w-4 h-4 ml-1" />

@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -25,7 +27,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatDate, getRelativeTime } from '@/lib/helpers';
 import type { Verification, DocumentStatus, PaginatedResponse } from '@/types/api';
@@ -139,7 +141,7 @@ function DocCard({ label, status, documentUrl, onApprove, onReject, loading }: D
 // ---------------------------------------------------------------------------
 
 export function AdminVerificationsPage() {
-  const navigate = useUIStore((s) => s.navigate);
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -169,23 +171,30 @@ export function AdminVerificationsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
     fetchVerifications();
-  }, [isAuthenticated, user, navigate, fetchVerifications]);
+  }, [isAuthenticated, user, router, fetchVerifications]);
 
-  // ── Document actions (simplified – just toggle status client-side as mock) ──
+  // ── Document actions ──────────────────────────────────────────────────────
   const handleApproveDoc = async (verificationId: number, docType: 'id' | 'tin' | 'license') => {
     const key = `${verificationId}-${docType}`;
     setActionLoading(key);
     try {
-      // Use the existing API endpoint to verify (re-upload would be needed)
-      // For simplified flow we simulate success
+      const payload = { status: 'approved' as const, notes: 'Approved via admin dashboard' };
+      if (docType === 'id') {
+        await api.trust.approveVerificationId(verificationId, payload);
+      } else if (docType === 'tin') {
+        await api.trust.approveVerificationTin(verificationId, payload);
+      } else if (docType === 'license') {
+        await api.trust.approveVerificationLicense(verificationId, payload);
+      }
       toast.success(`${docType.toUpperCase()} document approved.`);
       fetchVerifications();
-    } catch {
-      toast.error(`Failed to approve ${docType.toUpperCase()} document.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : `Failed to approve ${docType.toUpperCase()} document.`;
+      toast.error(msg);
     } finally {
       setActionLoading(null);
     }
@@ -195,10 +204,19 @@ export function AdminVerificationsPage() {
     const key = `${verificationId}-${docType}`;
     setActionLoading(key);
     try {
+      const payload = { status: 'rejected' as const, notes: 'Rejected via admin dashboard' };
+      if (docType === 'id') {
+        await api.trust.approveVerificationId(verificationId, payload);
+      } else if (docType === 'tin') {
+        await api.trust.approveVerificationTin(verificationId, payload);
+      } else if (docType === 'license') {
+        await api.trust.approveVerificationLicense(verificationId, payload);
+      }
       toast.success(`${docType.toUpperCase()} document rejected.`);
       fetchVerifications();
-    } catch {
-      toast.error(`Failed to reject ${docType.toUpperCase()} document.`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : `Failed to reject ${docType.toUpperCase()} document.`;
+      toast.error(msg);
     } finally {
       setActionLoading(null);
     }
@@ -230,7 +248,7 @@ export function AdminVerificationsPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'admin-dashboard' })}
+            onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Dashboard
@@ -332,7 +350,7 @@ export function AdminVerificationsPage() {
                               <DocCard
                                 label="ID Document"
                                 status={v.id_status}
-                                documentUrl={v.id_document}
+                                documentUrl={v.national_id_front}
                                 onApprove={() => handleApproveDoc(v.id, 'id')}
                                 onReject={() => handleRejectDoc(v.id, 'id')}
                                 loading={actionLoading === `${v.id}-id`}
@@ -340,15 +358,15 @@ export function AdminVerificationsPage() {
                               <DocCard
                                 label="TIN Document"
                                 status={v.tin_status}
-                                documentUrl={v.tin_document}
+                                documentUrl={v.tin_certificate}
                                 onApprove={() => handleApproveDoc(v.id, 'tin')}
                                 onReject={() => handleRejectDoc(v.id, 'tin')}
                                 loading={actionLoading === `${v.id}-tin`}
                               />
                               <DocCard
                                 label="Business License"
-                                status={v.license_status}
-                                documentUrl={v.license_document}
+                                status={v.business_license_status}
+                                documentUrl={v.business_license_document}
                                 onApprove={() => handleApproveDoc(v.id, 'license')}
                                 onReject={() => handleRejectDoc(v.id, 'license')}
                                 loading={actionLoading === `${v.id}-license`}

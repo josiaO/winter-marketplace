@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,7 +24,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { EmptyState } from '@/components/smartdalali/empty-state';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { getRelativeTime } from '@/lib/helpers';
 import { toast } from 'sonner';
@@ -151,7 +153,7 @@ function NotificationItem({ notification }: { notification: Notification }) {
 // ── Main Notifications Page ─────────────────────────────────────────────────
 
 export function NotificationsPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
 
   const [notifications, setNotifications] = useState<Notification[]>([]);
@@ -235,7 +237,7 @@ export function NotificationsPage() {
           title="Please login to view notifications"
           description="You need to be logged in to see your notifications."
           actionLabel="Login"
-          onAction={() => navigate({ view: 'login' })}
+          onAction={() => router.push(routes.login())}
         />
       </div>
     );

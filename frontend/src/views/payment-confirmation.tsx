@@ -1,31 +1,25 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { CreditCard, Loader2, Smartphone, Package } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, orderNumberLabel, orderTotalAmount } from '@/lib/helpers';
 import { toast } from 'sonner';
-import type { Order } from '@/types/api';
+import {
+  escrowFundsSecured,
+  type OrderWithEscrow,
+} from '@/lib/marketplace-order-payment';
 
 const PENDING_REF_KEY = 'sd_pending_txn_ref';
 
-type OrderWithEscrow = Order & { escrow?: { status?: string } | null };
-
-function escrowFundsSecured(order: OrderWithEscrow): boolean {
-  const s = order.escrow?.status;
-  if (!s) return false;
-  return ['HOLD', 'RELEASED', 'REFUNDED', 'DISPUTED'].includes(s);
-}
-
-export function PaymentConfirmationPage() {
-  const { currentView, navigate } = useUIStore();
-  const orderId =
-    currentView.view === 'payment-confirmation' ? currentView.orderId : '';
+export function PaymentConfirmationPage({ orderId }: { orderId: string }) {
+  const router = useRouter();
 
   const [order, setOrder] = useState<OrderWithEscrow | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -50,8 +44,8 @@ export function PaymentConfirmationPage() {
       const res = await api.commerce.initiatePayment(order.id, {
         payment_method: order.payment_method,
         payment_channel: order.payment_channel || undefined,
-        redirect_url: origin ? `${origin}/` : undefined,
-        cancel_url: origin ? `${origin}/` : undefined,
+        redirect_url: origin ? `${origin}/checkout/payment-return` : undefined,
+        cancel_url: origin ? `${origin}/checkout/payment-return` : undefined,
       });
       if (res.payment_url) {
         if (res.transaction_reference && typeof sessionStorage !== 'undefined') {
@@ -166,7 +160,7 @@ export function PaymentConfirmationPage() {
             className="w-full h-12 rounded-xl text-base font-semibold"
             size="lg"
             onClick={() =>
-              navigate({ view: 'order-detail', id: String(order.id) })
+              router.push(routes.order(String(order.id)))
             }
           >
             View order

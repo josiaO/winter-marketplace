@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -22,7 +24,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/smartdalali/empty-state';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { getRelativeTime, getInitials } from '@/lib/helpers';
 import { toast } from 'sonner';
@@ -31,11 +33,9 @@ import { cn } from '@/lib/utils';
 
 // ── Conversation Page ───────────────────────────────────────────────────────
 
-export function ConversationPage() {
-  const { navigate, currentView } = useUIStore();
+export function ConversationPage({ conversationId }: { conversationId: string }) {
+  const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
-
-  const conversationId = currentView.view === 'conversation' ? currentView.id : null;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<ConversationParticipant[]>([]);
@@ -92,7 +92,35 @@ export function ConversationPage() {
 
   useEffect(() => {
     fetchConversation();
-  }, [fetchConversation]);
+    
+    // Poll for new messages every 5 seconds
+    const interval = setInterval(async () => {
+      if (!isAuthenticated || !conversationId || sendingMessage) return;
+      try {
+        const msgRes = await api.communications.messages(conversationId, {
+          page: 1,
+          page_size: 100,
+        });
+        // Only update if count changed or different last message
+        setMessages((prev) => {
+          if (msgRes.results.length !== prev.length || 
+              (msgRes.results.length > 0 && msgRes.results[0].id !== prev[0]?.id)) {
+            return msgRes.results;
+          }
+          return prev;
+        });
+        
+        // Mark as read while polling if we are active
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
+          api.communications.markRead(conversationId).catch(() => {});
+        }
+      } catch (error) {
+        console.error('Polling error:', error);
+      }
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [fetchConversation, isAuthenticated, conversationId, sendingMessage]);
 
   useEffect(() => {
     scrollToBottom();
@@ -139,12 +167,12 @@ export function ConversationPage() {
     participants.find((p) => p.id !== user?.id) || participants[0];
 
   if (!isAuthenticated) {
-    navigate({ view: 'login' });
+    router.push(routes.login());
     return null;
   }
 
   if (!conversationId) {
-    navigate({ view: 'messages' });
+    router.push(routes.messages());
     return null;
   }
 
@@ -217,7 +245,7 @@ export function ConversationPage() {
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9 rounded-full flex-shrink-0"
-                onClick={() => navigate({ view: 'messages' })}
+                onClick={() => router.push(routes.messages())}
               >
                 <ArrowLeft className="w-4 h-4" />
               </Button>
@@ -258,7 +286,7 @@ export function ConversationPage() {
                   variant="outline"
                   size="sm"
                   className="hidden sm:flex gap-1.5 rounded-full text-xs"
-                  onClick={() => navigate({ view: 'product', id: String(listing.id) })}
+                  onClick={() => router.push(routes.product(String(listing.id)))}
                 >
                   <Package className="w-3.5 h-3.5" />
                   View Listing

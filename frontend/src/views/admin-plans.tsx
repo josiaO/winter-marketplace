@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -27,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS } from '@/lib/helpers';
 import type { Plan, Feature, PaginatedResponse } from '@/types/api';
@@ -62,7 +64,7 @@ function getFeatureTypeConfig(type: Feature['type']) {
 }
 
 export function AdminPlansPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [features, setFeatures] = useState<Feature[]>([]);
@@ -70,7 +72,7 @@ export function AdminPlansPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
 
@@ -89,7 +91,7 @@ export function AdminPlansPage() {
       }
     }
     loadData();
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   if (!isAuthenticated || !user || user.role !== 'admin') return null;
 
@@ -114,7 +116,7 @@ export function AdminPlansPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'admin-dashboard' })}
+            onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Back to Dashboard

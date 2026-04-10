@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -35,7 +37,7 @@ import {
 } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { canAccessSellerPortal } from '@/lib/auth-roles';
 import { api } from '@/lib/api-client';
 import type { BecomeSellerPayload } from '@/types/api';
@@ -78,7 +80,7 @@ const BENEFITS = [
 ];
 
 export function SellerRegisterPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated, setUser } = useAuthStore();
   const [currentStep, setCurrentStep] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
@@ -105,17 +107,17 @@ export function SellerRegisterPage() {
   // Auth check
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, router]);
 
   // Already seller check (matches backend IsSeller)
   useEffect(() => {
     if (user && canAccessSellerPortal(user)) {
       toast.info('You are already registered as a seller!');
-      navigate({ view: 'seller-dashboard' });
+      router.push(routes.sellerDashboard());
     }
-  }, [user, navigate]);
+  }, [user, router]);
 
   const validateStep = async (step: number): Promise<boolean> => {
     switch (step) {
@@ -163,7 +165,7 @@ export function SellerRegisterPage() {
       const me = await api.auth.me();
       setUser(me as any);
       toast.success('Seller account created. Next: verify your identity.');
-      navigate({ view: 'seller-verification' });
+      router.push(routes.sellerVerification());
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to register as seller.';
       setError(message);

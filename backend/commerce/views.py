@@ -394,6 +394,26 @@ class OrderViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(order)
         return Response({'success': True, 'order': serializer.data})
 
+    @action(detail=True, methods=['post'])
+    def mark_arrived(self, request, pk=None):
+        """Allows the seller to mark an order as arrived at the destination."""
+        order = self.get_object()
+        user = request.user
+        
+        if order.seller != user and not (user.is_superuser or user.is_staff):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+            
+        if order.status != 'shipped':
+            return Response({'error': f'Cannot mark order as arrived from {order.status} status.'}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            OrderLifecycleManager.mark_arrived(order, actor=user)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            
+        serializer = self.get_serializer(order)
+        return Response({'success': True, 'order': serializer.data})
+
     @action(
         detail=True,
         methods=['post'],

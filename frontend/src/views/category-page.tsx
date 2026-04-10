@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -25,7 +27,6 @@ import {
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
 import { EmptyState } from '@/components/smartdalali/empty-state';
-import { useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
 import type { Listing, Category, PaginatedResponse } from '@/types/api';
 
@@ -36,9 +37,9 @@ const SORT_OPTIONS = [
   { value: '-view_count', label: 'Most Popular' },
 ];
 
-export function CategoryPage() {
-  const { currentView, navigate } = useUIStore();
-  const slug = currentView.view === 'category' ? currentView.slug : '';
+export function CategoryPage({ categorySlug }: { categorySlug: string }) {
+  const router = useRouter();
+  const slug = categorySlug;
 
   const [category, setCategory] = useState<Category | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
@@ -85,8 +86,8 @@ export function CategoryPage() {
   }, [fetchCategoryData]);
 
   const handleProductSelect = useCallback(
-    (listing: Listing) => navigate({ view: 'product', id: String(listing.id) }),
-    [navigate]
+    (listing: Listing) => router.push(routes.product(String(listing.id))),
+    [router]
   );
 
   if (isLoading && !category) {
@@ -112,7 +113,7 @@ export function CategoryPage() {
             <BreadcrumbItem>
               <BreadcrumbLink
                 className="cursor-pointer text-sm flex items-center gap-1"
-                onClick={() => navigate({ view: 'home' })}
+                onClick={() => router.push(routes.home())}
               >
                 <Home className="w-3.5 h-3.5" />
                 Home
@@ -172,7 +173,7 @@ export function CategoryPage() {
               {category.children.map((sub) => (
                 <button
                   key={sub.id}
-                  onClick={() => navigate({ view: 'category', slug: sub.slug })}
+                  onClick={() => router.push(routes.category(sub.slug))}
                   className="flex items-center gap-3 p-3 rounded-xl border bg-card hover:bg-muted/50 transition-colors text-left"
                 >
                   {sub.image ? (
@@ -220,7 +221,7 @@ export function CategoryPage() {
             title="No products in this category"
             description="There are no products listed in this category yet. Check back later!"
             actionLabel="Browse All Categories"
-            onAction={() => navigate({ view: 'home' })}
+            onAction={() => router.push(routes.home())}
           />
         ) : (
           <>

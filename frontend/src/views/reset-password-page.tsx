@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { routes } from '@/lib/routes';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod/v4';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,9 +23,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { ApiClientError } from '@/lib/api-client';
+import { useAuthStore } from '@/store';
 
 const resetPasswordSchema = z
   .object({
@@ -41,15 +43,23 @@ const resetPasswordSchema = z
 type ResetPasswordFormValues = z.infer<typeof resetPasswordSchema>;
 
 export function ResetPasswordPage() {
-  const { currentView, navigate } = useUIStore();
-  const uid = currentView.view === 'reset-password' ? currentView.uid : '';
-  const token = currentView.view === 'reset-password' ? currentView.token : '';
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const uid = (searchParams.get('uid') || '').trim();
+  const token = (searchParams.get('token') || '').trim();
 
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
+  const { isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
+    }
+  }, [isAuthenticated, router]);
 
   const {
     register,
@@ -122,7 +132,7 @@ export function ResetPasswordPage() {
                 Invalid or missing reset credentials. Please request a new password reset link.
               </p>
               <Button
-                onClick={() => navigate({ view: 'forgot-password' })}
+                onClick={() => router.push(routes.forgotPassword())}
                 className="bg-emerald-600 hover:bg-emerald-700 border-0"
               >
                 Request Reset Link
@@ -145,7 +155,7 @@ export function ResetPasswordPage() {
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
           <button
-            onClick={() => navigate({ view: 'home' })}
+            onClick={() => router.push(routes.home())}
             className="flex items-center gap-3 group mb-2"
           >
             <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:scale-105 transition-transform">
@@ -184,7 +194,7 @@ export function ResetPasswordPage() {
               </CardContent>
               <CardFooter className="pb-6 px-6">
                 <Button
-                  onClick={() => navigate({ view: 'login' })}
+                  onClick={() => router.push(routes.login())}
                   className="w-full h-11 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700"
                 >
                   Sign In
@@ -303,7 +313,7 @@ export function ResetPasswordPage() {
               </CardContent>
               <CardFooter className="pb-6 px-6">
                 <button
-                  onClick={() => navigate({ view: 'login' })}
+                  onClick={() => router.push(routes.login())}
                   className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors mx-auto"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />

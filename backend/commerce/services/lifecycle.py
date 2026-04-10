@@ -345,6 +345,30 @@ class OrderLifecycleManager:
 
     @staticmethod
     @transaction.atomic
+    def mark_arrived(order: Order, actor=None) -> Order:
+        """Mark order as arrived at its destination/pickup point."""
+        if order.status != 'shipped':
+            raise ValueError(f"Cannot mark order as arrived from {order.status} status.")
+
+        prev = order.status
+        with order_status_write_context(order):
+            now = timezone.now()
+            order.status = 'arrived'
+            order.arrived_at = now
+            order.save(update_fields=['status', 'arrived_at', 'updated_at'])
+            
+            # Sync Delivery
+            OrderLifecycleManager._sync_delivery(order)
+            
+            write_order_audit(
+                order, 'mark_arrived', actor=actor, from_status=prev, to_status=order.status
+            )
+        emit_event('ORDER_ARRIVED', {'order_id': order.id}, source_module='commerce.lifecycle')
+        _lifecycle_paranoia(order)
+        return order
+
+    @staticmethod
+    @transaction.atomic
     def confirm_delivery(order: Order, actor=None) -> Order:
         """
         System / automation: mark order as delivered (buyer received goods).

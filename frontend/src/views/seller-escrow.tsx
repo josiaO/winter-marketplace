@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -27,7 +29,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import type { Transaction, TransactionStatus } from '@/types/api';
 
@@ -105,7 +107,7 @@ function getEscrowStatusBadge(status: TransactionStatus) {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function SellerEscrowPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -115,12 +117,12 @@ export function SellerEscrowPage() {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!user?.is_seller) {
       toast.error('You must be a seller to view escrow transactions.');
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
 
@@ -203,7 +205,7 @@ export function SellerEscrowPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'seller-dashboard' })}
+            onClick={() => router.push(routes.sellerDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Dashboard

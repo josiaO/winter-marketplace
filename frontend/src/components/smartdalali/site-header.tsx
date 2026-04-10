@@ -40,13 +40,15 @@ import {
   SheetTitle,
   SheetClose,
 } from '@/components/ui/sheet';
+import { useRouter, usePathname } from 'next/navigation';
 import { useUIStore, useAuthStore, useCartStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { cn } from '@/lib/utils';
 import { getInitials } from '@/lib/helpers';
-import { AppView } from '@/types';
 import type { Category } from '@/types/api';
 import { canAccessAdminPortal, canAccessSellerPortal } from '@/lib/auth-roles';
+import { routes, topLevelNavFromPathname } from '@/lib/routes';
+import { useNotifications } from '@/hooks/use-notifications';
 
 /** Derive display name from Django User (first_name + last_name || username) */
 function userDisplayName(user: {
@@ -65,9 +67,13 @@ export function SiteHeader() {
   const categoryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
-  const { navigate, searchQuery, setSearchQuery, currentView } = useUIStore();
+  const router = useRouter();
+  const pathname = usePathname();
+  const navSection = topLevelNavFromPathname(pathname || '/');
+  const { searchQuery, setSearchQuery } = useUIStore();
   const { user, isAuthenticated, logout } = useAuthStore();
   const { itemCount } = useCartStore();
+  const { unreadCount: notificationUnread } = useNotifications();
 
   useEffect(() => {
     const handleScroll = () => {
@@ -93,10 +99,8 @@ export function SiteHeader() {
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
-      navigate({ view: 'search', query: searchQuery.trim() });
-      setIsMobileMenuOpen(false);
-    }
+    router.push(routes.marketplace(searchQuery.trim()));
+    setIsMobileMenuOpen(false);
   };
 
   const handleCategoryHover = () => {
@@ -114,10 +118,8 @@ export function SiteHeader() {
 
   const handleLogout = () => {
     logout();
-    navigate({ view: 'home' });
+    router.push(routes.home());
   };
-
-  const isActive = (view: string) => currentView.view === view;
 
   return (
     <>
@@ -145,7 +147,7 @@ export function SiteHeader() {
 
               {/* Logo */}
               <button
-                onClick={() => navigate({ view: 'home' })}
+                onClick={() => router.push(routes.home())}
                 className="flex items-center gap-2 group"
               >
                 <div className="w-9 h-9 bg-primary rounded-xl flex items-center justify-center group-hover:scale-105 transition-transform">
@@ -179,9 +181,9 @@ export function SiteHeader() {
               {/* Desktop nav links */}
               <nav className="hidden lg:flex items-center gap-1">
                 <Button
-                  variant={isActive('home') ? 'secondary' : 'ghost'}
+                  variant={navSection === 'home' ? 'secondary' : 'ghost'}
                   size="sm"
-                  onClick={() => navigate({ view: 'home' })}
+                  onClick={() => router.push(routes.home())}
                   className="rounded-full text-sm font-medium"
                 >
                   <Home className="w-4 h-4 mr-1.5" />
@@ -199,7 +201,7 @@ export function SiteHeader() {
                     size="sm"
                     className="rounded-full text-sm font-medium"
                     onClick={() => {
-                      navigate({ view: 'home' });
+                      router.push(routes.home());
                     }}
                   >
                     <Grid3X3 className="w-4 h-4 mr-1.5" />
@@ -214,7 +216,7 @@ export function SiteHeader() {
                           <button
                             key={cat.id}
                             onClick={() => {
-                              navigate({ view: 'category', slug: cat.slug });
+                              router.push(routes.category(cat.slug));
                               setIsCategoryOpen(false);
                             }}
                             className="w-full text-left px-3 py-2 text-sm rounded-lg hover:bg-muted transition-colors flex items-center justify-between"
@@ -237,11 +239,11 @@ export function SiteHeader() {
                   size="sm"
                   onClick={() => {
                     if (user && canAccessSellerPortal(user)) {
-                      navigate({ view: 'seller-dashboard' });
+                      router.push(routes.sellerDashboard());
                     } else if (isAuthenticated) {
-                      navigate({ view: 'seller-register' });
+                      router.push(routes.sellerRegister());
                     } else {
-                      navigate({ view: 'login' });
+                      router.push(routes.login());
                     }
                   }}
                   className="rounded-full text-sm font-medium"
@@ -256,7 +258,7 @@ export function SiteHeader() {
                 variant="ghost"
                 size="icon"
                 className="relative rounded-full"
-                onClick={() => navigate({ view: 'cart' })}
+                onClick={() => router.push(routes.cart())}
                 aria-label="Shopping cart"
               >
                 <ShoppingBag className="w-5 h-5" />
@@ -266,6 +268,23 @@ export function SiteHeader() {
                   </Badge>
                 )}
               </Button>
+
+              {isAuthenticated && user && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="relative rounded-full"
+                  onClick={() => router.push(routes.notifications())}
+                  aria-label="Notifications"
+                >
+                  <Bell className="w-5 h-5" />
+                  {notificationUnread > 0 && (
+                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px] font-bold bg-red-600 text-white rounded-full">
+                      {notificationUnread > 99 ? '99+' : notificationUnread}
+                    </Badge>
+                  )}
+                </Button>
+              )}
 
               {/* User menu */}
               {isAuthenticated && user ? (
@@ -304,24 +323,24 @@ export function SiteHeader() {
                       )}
                     </div>
                     <DropdownMenuSeparator />
-                    <DropdownMenuItem onClick={() => navigate({ view: 'orders' })}>
+                    <DropdownMenuItem onClick={() => router.push(routes.orders())}>
                       <Package className="w-4 h-4 mr-2" />
                       My Orders
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate({ view: 'wishlist' })}>
+                    <DropdownMenuItem onClick={() => router.push(routes.wishlist())}>
                       <Heart className="w-4 h-4 mr-2" />
                       Wishlist
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate({ view: 'messages' })}>
+                    <DropdownMenuItem onClick={() => router.push(routes.messages())}>
                       <MessageSquare className="w-4 h-4 mr-2" />
                       Messages
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => navigate({ view: 'notifications' })}>
+                    <DropdownMenuItem onClick={() => router.push(routes.notifications())}>
                       <Bell className="w-4 h-4 mr-2" />
                       Notifications
                     </DropdownMenuItem>
                     <DropdownMenuItem
-                      onClick={() => navigate({ view: 'profile' })}
+                      onClick={() => router.push(routes.profile())}
                     >
                       <User className="w-4 h-4 mr-2" />
                       My Profile
@@ -330,25 +349,25 @@ export function SiteHeader() {
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={() => navigate({ view: 'seller-dashboard' })}
+                          onClick={() => router.push(routes.sellerDashboard())}
                         >
                           <LayoutDashboard className="w-4 h-4 mr-2" />
                           Seller Dashboard
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => navigate({ view: 'seller-listings' })}
+                          onClick={() => router.push(routes.sellerListings())}
                         >
                           <ClipboardList className="w-4 h-4 mr-2" />
                           My Listings
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => navigate({ view: 'seller-orders' })}
+                          onClick={() => router.push(routes.sellerOrders())}
                         >
                           <CreditCard className="w-4 h-4 mr-2" />
                           Seller Orders
                         </DropdownMenuItem>
                         <DropdownMenuItem
-                          onClick={() => navigate({ view: 'seller-payouts' })}
+                          onClick={() => router.push(routes.sellerPayouts())}
                         >
                           <Wallet className="w-4 h-4 mr-2" />
                           Payouts
@@ -359,7 +378,7 @@ export function SiteHeader() {
                       <>
                         <DropdownMenuSeparator />
                         <DropdownMenuItem
-                          onClick={() => navigate({ view: 'admin-dashboard' })}
+                          onClick={() => router.push(routes.adminDashboard())}
                         >
                           <Shield className="w-4 h-4 mr-2" />
                           Admin Panel
@@ -381,14 +400,14 @@ export function SiteHeader() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => navigate({ view: 'login' })}
+                    onClick={() => router.push(routes.login())}
                     className="rounded-full text-sm font-medium"
                   >
                     Login
                   </Button>
                   <Button
                     size="sm"
-                    onClick={() => navigate({ view: 'register' })}
+                    onClick={() => router.push(routes.register())}
                     className="rounded-full text-sm font-medium"
                   >
                     Register
@@ -439,10 +458,10 @@ export function SiteHeader() {
           <nav className="flex flex-col p-2">
             <SheetClose asChild>
               <button
-                onClick={() => navigate({ view: 'home' })}
+                onClick={() => router.push(routes.home())}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                  isActive('home')
+                  navSection === 'home'
                     ? 'bg-primary/10 text-primary'
                     : 'text-foreground hover:bg-muted',
                 )}
@@ -462,7 +481,7 @@ export function SiteHeader() {
                   <SheetClose key={cat.id} asChild>
                     <button
                       onClick={() =>
-                        navigate({ view: 'category', slug: cat.slug })
+                        router.push(routes.category(cat.slug))
                       }
                       className="w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground"
                     >
@@ -484,11 +503,11 @@ export function SiteHeader() {
               <button
                 onClick={() => {
                   if (user && canAccessSellerPortal(user)) {
-                    navigate({ view: 'seller-dashboard' });
+                    router.push(routes.sellerDashboard());
                   } else if (isAuthenticated) {
-                    navigate({ view: 'seller-register' });
+                    router.push(routes.sellerRegister());
                   } else {
-                    navigate({ view: 'login' });
+                    router.push(routes.login());
                   }
                 }}
                 className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-foreground hover:bg-muted transition-colors"
@@ -506,7 +525,7 @@ export function SiteHeader() {
                 </p>
                 <SheetClose asChild>
                   <button
-                    onClick={() => navigate({ view: 'orders' })}
+                    onClick={() => router.push(routes.orders())}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full"
                   >
                     <Package className="w-4 h-4" />
@@ -515,7 +534,7 @@ export function SiteHeader() {
                 </SheetClose>
                 <SheetClose asChild>
                   <button
-                    onClick={() => navigate({ view: 'wishlist' })}
+                    onClick={() => router.push(routes.wishlist())}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full"
                   >
                     <Heart className="w-4 h-4" />
@@ -524,7 +543,7 @@ export function SiteHeader() {
                 </SheetClose>
                 <SheetClose asChild>
                   <button
-                    onClick={() => navigate({ view: 'messages' })}
+                    onClick={() => router.push(routes.messages())}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full"
                   >
                     <MessageSquare className="w-4 h-4" />
@@ -533,16 +552,26 @@ export function SiteHeader() {
                 </SheetClose>
                 <SheetClose asChild>
                   <button
-                    onClick={() => navigate({ view: 'notifications' })}
-                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full"
+                    onClick={() => router.push(routes.notifications())}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full relative"
                   >
-                    <Bell className="w-4 h-4" />
+                    <div className="relative">
+                      <Bell className="w-4 h-4" />
+                      {notificationUnread > 0 && (
+                        <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-600 rounded-full" />
+                      )}
+                    </div>
                     Notifications
+                    {notificationUnread > 0 && (
+                      <Badge className="ml-auto bg-red-600 text-white text-[10px] h-4 min-w-[16px] flex items-center justify-center p-0 px-1">
+                        {notificationUnread}
+                      </Badge>
+                    )}
                   </button>
                 </SheetClose>
                 <SheetClose asChild>
                   <button
-                    onClick={() => navigate({ view: 'profile' })}
+                    onClick={() => router.push(routes.profile())}
                     className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full"
                   >
                     <User className="w-4 h-4" />
@@ -552,7 +581,7 @@ export function SiteHeader() {
                 {canAccessSellerPortal(user) && (
                   <SheetClose asChild>
                     <button
-                      onClick={() => navigate({ view: 'seller-dashboard' })}
+                      onClick={() => router.push(routes.sellerDashboard())}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full"
                     >
                       <LayoutDashboard className="w-4 h-4" />
@@ -563,7 +592,7 @@ export function SiteHeader() {
                 {canAccessAdminPortal(user) && (
                   <SheetClose asChild>
                     <button
-                      onClick={() => navigate({ view: 'admin-dashboard' })}
+                      onClick={() => router.push(routes.adminDashboard())}
                       className="flex items-center gap-3 px-3 py-2 rounded-lg text-sm hover:bg-muted transition-colors text-foreground w-full"
                     >
                       <Shield className="w-4 h-4" />
@@ -589,7 +618,7 @@ export function SiteHeader() {
                     <Button
                       variant="outline"
                       className="flex-1 rounded-full"
-                      onClick={() => navigate({ view: 'login' })}
+                      onClick={() => router.push(routes.login())}
                     >
                       Login
                     </Button>
@@ -597,7 +626,7 @@ export function SiteHeader() {
                   <SheetClose asChild>
                     <Button
                       className="flex-1 rounded-full"
-                      onClick={() => navigate({ view: 'register' })}
+                      onClick={() => router.push(routes.register())}
                     >
                       Register
                     </Button>

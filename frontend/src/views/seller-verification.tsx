@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -21,7 +23,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import type { VerificationStatus } from '@/types/api';
 
@@ -90,7 +92,7 @@ function getStatusExplanation(status: VerificationStatus): string {
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function SellerVerificationPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [isLoading, setIsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -106,6 +108,13 @@ export function SellerVerificationPage() {
   const [rejectionReason, setRejectionReason] = useState<string | null>(null);
   const [onboarding, setOnboarding] = useState<any>(null);
 
+  // Business verification state
+  const [businessName, setBusinessName] = useState('');
+  const [licenseNumber, setLicenseNumber] = useState('');
+  const [tinNumber, setTinNumber] = useState('');
+  const [businessCert, setBusinessCert] = useState<File | null>(null);
+  const [businessSubmitting, setBusinessSubmitting] = useState(false);
+
   const sellerProfile = user?.seller_profile;
   const verificationStatus: VerificationStatus = sellerProfile?.verification_status || 'unverified';
   const statusConfig = getStatusConfig(verificationStatus);
@@ -114,17 +123,18 @@ export function SellerVerificationPage() {
   // ─── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!user?.is_seller) {
       toast.error('You must be a seller to access verification.');
-      navigate({ view: 'seller-register' });
+      router.push(routes.sellerRegister());
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   const idFrontInputRef = useRef<HTMLInputElement>(null);
   const selfieInputRef = useRef<HTMLInputElement>(null);
+  const businessCertInputRef = useRef<HTMLInputElement>(null);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -165,7 +175,7 @@ export function SellerVerificationPage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate({ view: 'seller-dashboard' })}
+              onClick={() => router.push(routes.sellerDashboard())}
               className="shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -396,6 +406,124 @@ export function SellerVerificationPage() {
               >
                 {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
                 Submit
+              </Button>
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        {/* Business verification submission */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
+          <Card className="border-0 shadow-md shadow-black/5">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <BadgeCheck className="w-5 h-5 text-primary" />
+                Business Verification (Upgrade)
+              </CardTitle>
+              <CardDescription>
+                Upgrade to a business account to increase your limits and gain maximum trust.
+                Requires 500k TZS total sales or 20 completed orders.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground">Business Name</label>
+                  <input
+                    className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                    value={businessName}
+                    onChange={(e) => setBusinessName(e.target.value)}
+                    placeholder="Enter registered business name"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground">TIN Number</label>
+                  <input
+                    className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                    value={tinNumber}
+                    onChange={(e) => setTinNumber(e.target.value)}
+                    placeholder="Enter TIN number"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground">License Number</label>
+                  <input
+                    className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                    value={licenseNumber}
+                    onChange={(e) => setLicenseNumber(e.target.value)}
+                    placeholder="Enter business license number"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-sm font-medium text-foreground">Business Certificate (PDF/Image)</label>
+                  <input
+                    ref={businessCertInputRef}
+                    type="file"
+                    accept="image/*,.pdf"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0] || null;
+                      setBusinessCert(f);
+                      e.target.value = '';
+                    }}
+                  />
+                  <Button variant="outline" className="w-full gap-2 h-10" onClick={() => businessCertInputRef.current?.click()}>
+                    <Upload className="w-4 h-4" />
+                    {businessCert ? 'Replace Certificate' : 'Upload Certificate'}
+                  </Button>
+                </div>
+              </div>
+
+              {businessCert && (
+                <div className="flex items-center gap-2 text-xs text-muted-foreground p-2 bg-muted/30 rounded-md">
+                  <FileText className="w-3 h-3" />
+                  <span className="truncate flex-1">{businessCert.name}</span>
+                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setBusinessCert(null)}>
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              )}
+
+              <Button
+                className="w-full gap-2"
+                disabled={businessSubmitting}
+                variant="secondary"
+                onClick={async () => {
+                  if (!businessName || !tinNumber) {
+                    toast.error('Business name and TIN number are required.');
+                    return;
+                  }
+                  setBusinessSubmitting(true);
+                  try {
+                    await api.sellers.submitBusinessVerification({
+                      business_name: businessName,
+                      tin_number: tinNumber,
+                      business_registration_no: licenseNumber,
+                      business_certificate: businessCert || undefined
+                    });
+                    toast.success('Business verification submitted. We will review it shortly.');
+                    setBusinessName('');
+                    setTinNumber('');
+                    setLicenseNumber('');
+                    setBusinessCert(null);
+                    await refresh();
+                  } catch (err) {
+                    const message =
+                      err instanceof Error ? err.message : 'Failed to submit business verification.';
+                    toast.error(message);
+                  } finally {
+                    setBusinessSubmitting(false);
+                  }
+                }}
+              >
+                {businessSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                Submit Upgrade Request
               </Button>
             </CardContent>
           </Card>

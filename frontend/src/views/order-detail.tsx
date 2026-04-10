@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -9,17 +11,16 @@ import {
   Phone,
   Truck,
   CreditCard,
-  ChevronLeft,
   CheckCircle2,
   XCircle,
   Star,
   ShieldCheck,
-  Clock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Input } from '@/components/ui/input';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -39,13 +40,12 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { OrderStatusBadge } from '@/components/smartdalali/order-status-badge';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import {
   formatTZS,
   formatDate,
   formatDateTime,
-  getStatusColor,
   getStatusLabel,
   orderTotalAmount,
   orderNumberLabel,
@@ -54,14 +54,16 @@ import {
   commerceOrderItemUnitPrice,
   commerceOrderItemLineTotal,
 } from '@/lib/helpers';
+import { buyerShouldSeeOnlinePaymentCta } from '@/lib/marketplace-order-payment';
 import { toast } from 'sonner';
-import type { Order, OrderStatus } from '@/types/api';
+import { ApiClientError, type Order, type OrderStatus } from '@/types/api';
 
 const STATUS_STEPS: OrderStatus[] = [
   'pending',
   'confirmed',
   'processing',
   'shipped',
+  'arrived',
   'delivered',
 ];
 
@@ -131,17 +133,24 @@ function StatusTimeline({ order }: { order: Order }) {
   );
 }
 
-export function OrderDetailPage() {
-  const { currentView, navigate } = useUIStore();
-  const { isAuthenticated } = useAuthStore();
-  const orderId = currentView.view === 'order-detail' ? currentView.id : '';
-
+export function OrderDetailPage({ orderId }: { orderId: string }) {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAuthStore();
+  
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isCancelling, setIsCancelling] = useState(false);
   const [isDelivering, setIsDelivering] = useState(false);
+  const [isMarkingArrived, setIsMarkingArrived] = useState(false);
+  const [isDisputing, setIsDisputing] = useState(false);
+  
   const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [cancelReason, setCancelReason] = useState('');
+  
+  const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
+  const [disputeReason, setDisputeReason] = useState('');
+  const [evidenceImages, setEvidenceImages] = useState<File[]>([]);
+  const [evidenceVideo, setEvidenceVideo] = useState<File | null>(null);
 
   const fetchOrder = useCallback(async () => {
     if (!orderId) return;
@@ -149,13 +158,17 @@ export function OrderDetailPage() {
     try {
       const data = await api.commerce.orderDetail(orderId);
       setOrder(data);
-    } catch {
-      toast.error('Failed to load order');
-      navigate({ view: 'orders' });
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to load order';
+      toast.error(msg);
+      router.push(routes.orders());
     } finally {
       setIsLoading(false);
     }
-  }, [orderId, navigate]);
+  }, [orderId, router]);
 
   useEffect(() => {
     fetchOrder();
@@ -172,8 +185,12 @@ export function OrderDetailPage() {
       toast.success('Order cancelled successfully');
       setCancelDialogOpen(false);
       fetchOrder();
-    } catch {
-      toast.error('Failed to cancel order');
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to cancel order';
+      toast.error(msg);
     } finally {
       setIsCancelling(false);
     }
@@ -186,10 +203,58 @@ export function OrderDetailPage() {
       await api.commerce.confirmReceipt(order.id);
       toast.success('Delivery confirmed! Thank you.');
       fetchOrder();
-    } catch {
-      toast.error('Failed to confirm delivery');
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to confirm delivery';
+      toast.error(msg);
     } finally {
       setIsDelivering(false);
+    }
+  };
+
+  const handleMarkArrived = async () => {
+    if (!order) return;
+    setIsMarkingArrived(true);
+    try {
+      await api.commerce.markArrived(order.id);
+      toast.success('Order marked as arrived at pickup point!');
+      fetchOrder();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to mark as arrived';
+      toast.error(msg);
+    } finally {
+      setIsMarkingArrived(false);
+    }
+  };
+
+  const handleOpenDispute = async () => {
+    if (!order || !disputeReason.trim()) return;
+    setIsDisputing(true);
+    try {
+      await api.commerce.openDispute(order.id, {
+        dispute_reason: disputeReason.trim(),
+        evidence_images: evidenceImages.length > 0 ? evidenceImages : undefined,
+        evidence_video: evidenceVideo || undefined,
+      });
+      toast.success('Dispute opened successfully. Support will investigate.');
+      setDisputeDialogOpen(false);
+      setDisputeReason('');
+      setEvidenceImages([]);
+      setEvidenceVideo(null);
+      fetchOrder();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to open dispute';
+      toast.error(msg);
+    } finally {
+      setIsDisputing(false);
     }
   };
 
@@ -237,7 +302,7 @@ export function OrderDetailPage() {
           <BreadcrumbItem>
             <BreadcrumbLink
               className="cursor-pointer text-sm"
-              onClick={() => navigate({ view: 'orders' })}
+              onClick={() => router.push(routes.orders())}
             >
               My Orders
             </BreadcrumbLink>
@@ -291,6 +356,18 @@ export function OrderDetailPage() {
         </Card>
 
         {/* Action Buttons */}
+        <div className="flex flex-col sm:flex-row flex-wrap gap-3">
+        {buyerShouldSeeOnlinePaymentCta(order) && (
+          <Button
+            className="rounded-xl bg-emerald-600 hover:bg-emerald-700"
+            onClick={() =>
+              router.push(routes.checkoutConfirm(String(order.id)))
+            }
+          >
+            <CreditCard className="w-4 h-4 mr-2" />
+            Complete payment
+          </Button>
+        )}
         {(order.status === 'pending' || order.status === 'confirmed') && (
           <Button
             variant="destructive"
@@ -324,12 +401,46 @@ export function OrderDetailPage() {
           <Button
             variant="outline"
             className="rounded-xl"
-            onClick={() => navigate({ view: 'product', id: String(order.items[0]?.listing?.id || '') })}
+            onClick={() => router.push(routes.product(String(order.items[0]?.listing?.id || '')))}
           >
             <Star className="w-4 h-4 mr-2" />
             Leave a Review
           </Button>
         )}
+        
+        {/* Buyer: Open Dispute when Arrived */}
+        {order.status === 'arrived' && order.buyer?.id === user?.id && (
+          <Button
+            variant="outline"
+            className="rounded-xl border-orange-500 text-orange-600 hover:bg-orange-50"
+            onClick={() => setDisputeDialogOpen(true)}
+          >
+            <ShieldCheck className="w-4 h-4 mr-2" />
+            Open Dispute
+          </Button>
+        )}
+
+        {/* Seller: Mark Arrived when Shipped */}
+        {order.status === 'shipped' && order.seller?.id === user?.id && (
+          <Button
+            className="rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white"
+            onClick={handleMarkArrived}
+            disabled={isMarkingArrived}
+          >
+            {isMarkingArrived ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                Updating...
+              </>
+            ) : (
+              <>
+                <MapPin className="w-4 h-4 mr-2" />
+                Mark Arrived at Destination
+              </>
+            )}
+          </Button>
+        )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Items List */}
@@ -348,7 +459,7 @@ export function OrderDetailPage() {
                   <div
                     key={item.id}
                     className="flex gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                    onClick={() => navigate({ view: 'product', id: String(item.listing?.id || '') })}
+                    onClick={() => router.push(routes.product(String(item.listing?.id || '')))}
                   >
                     <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
                       {lineImage ? (
@@ -451,6 +562,19 @@ export function OrderDetailPage() {
                     <span className="font-mono text-xs">{order.transaction_reference}</span>
                   </div>
                 )}
+                {buyerShouldSeeOnlinePaymentCta(order) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full mt-2 rounded-lg"
+                    onClick={() =>
+                      router.push(routes.checkoutConfirm(String(order.id)))
+                    }
+                  >
+                    <CreditCard className="w-3.5 h-3.5 mr-2" />
+                    Pay or retry checkout
+                  </Button>
+                )}
               </CardContent>
             </Card>
 
@@ -506,6 +630,77 @@ export function OrderDetailPage() {
               disabled={isCancelling}
             >
               {isCancelling ? 'Cancelling...' : 'Cancel Order'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dispute Dialog */}
+      <Dialog open={disputeDialogOpen} onOpenChange={setDisputeDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-orange-600">
+              <ShieldCheck className="w-5 h-5" />
+              Open a Dispute
+            </DialogTitle>
+            <DialogDescription>
+              Something wrong with your order? Provide details and evidence below.
+              Escrow funds will be held until resolved.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="dispute-reason">Reason for dispute</Label>
+              <Textarea
+                id="dispute-reason"
+                placeholder="Describe the issue (e.g. damaged item, wrong product)..."
+                value={disputeReason}
+                onChange={(e) => setDisputeReason(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Evidence Photos</Label>
+              <Input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => setEvidenceImages(Array.from(e.target.files || []))}
+                className="cursor-pointer"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Video Evidence (Optional)</Label>
+              <Input
+                type="file"
+                accept="video/*"
+                onChange={(e) => setEvidenceVideo(e.target.files?.[0] || null)}
+                className="cursor-pointer"
+              />
+            </div>
+            
+            <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground flex gap-2">
+              <ShieldCheck className="w-4 h-4 shrink-0 text-orange-500" />
+              <p>
+                Our team will review the evidence from both you and the seller.
+                Evidence helps us resolve disputes faster.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDisputeDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-orange-600 hover:bg-orange-700 text-white"
+              onClick={handleOpenDispute}
+              disabled={isDisputing || !disputeReason.trim()}
+            >
+              {isDisputing ? 'Submitting...' : 'Submit Dispute'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -31,7 +33,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { canAccessSellerPortal } from '@/lib/auth-roles';
 import { api } from '@/lib/api-client';
 import type { Category } from '@/types/api';
@@ -131,7 +133,7 @@ function flattenCategories(cats: Category[]): Array<{ id: number; name: string; 
 // ─── Component ─────────────────────────────────────────────────────────────────
 
 export function SellerListingCreatePage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [categories, setCategories] = useState<Category[]>([]);
   const [flatCategories, setFlatCategories] = useState<Array<{ id: number; name: string; depth: number }>>([]);
@@ -164,14 +166,14 @@ export function SellerListingCreatePage() {
   // ─── Auth guard ────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!canAccessSellerPortal(user)) {
       toast.error('You must be a seller to create listings.');
-      navigate({ view: 'seller-register' });
+      router.push(routes.sellerRegister());
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   // ─── Load categories ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -280,22 +282,46 @@ export function SellerListingCreatePage() {
       const specsPayload: Record<string, unknown> = {};
       for (const f of categoryFields) {
         const raw = specs[f.field_name];
-        if (raw === undefined || raw === null || raw === '') continue;
+        if (raw === undefined || raw === null || String(raw).trim() === '') continue;
+        
         if (f.field_type === 'integer') {
-          const n = Number(raw);
-          if (!Number.isNaN(n)) specsPayload[f.field_name] = Math.trunc(n);
+          const n = parseInt(String(raw), 10);
+          if (!isNaN(n)) {
+            specsPayload[f.field_name] = n;
+          } else if (f.required) {
+            toast.error(`${f.field_label} must be a valid whole number.`);
+            setIsSubmitting(false);
+            return;
+          }
           continue;
         }
+        
         if (f.field_type === 'decimal' || f.field_type === 'number') {
-          const n = Number(raw);
-          if (!Number.isNaN(n)) specsPayload[f.field_name] = n;
+          const n = parseFloat(String(raw));
+          if (!isNaN(n)) {
+            specsPayload[f.field_name] = n;
+          } else if (f.required) {
+            toast.error(`${f.field_label} must be a valid number.`);
+            setIsSubmitting(false);
+            return;
+          }
           continue;
         }
+        
         if (f.field_type === 'boolean') {
-          specsPayload[f.field_name] = Boolean(raw);
+          specsPayload[f.field_name] = raw === true || raw === 'true';
           continue;
         }
-        specsPayload[f.field_name] = raw;
+        
+        if (f.field_type === 'select' && f.choices) {
+          if (!f.choices.includes(String(raw))) {
+            toast.error(`Invalid selection for ${f.field_label}.`);
+            setIsSubmitting(false);
+            return;
+          }
+        }
+        
+        specsPayload[f.field_name] = String(raw).trim();
       }
 
       await api.listings.create({
@@ -315,7 +341,7 @@ export function SellerListingCreatePage() {
         ...(images.length > 0 ? { images } : {}),
       });
       toast.success(isDraft ? 'Draft saved successfully!' : 'Listing published successfully!');
-      navigate({ view: 'seller-listings' });
+      router.push(routes.sellerListings());
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to create listing.';
       toast.error(message);
@@ -339,7 +365,7 @@ export function SellerListingCreatePage() {
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => navigate({ view: 'seller-listings' })}
+              onClick={() => router.push(routes.sellerListings())}
               className="shrink-0"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -793,7 +819,7 @@ export function SellerListingCreatePage() {
             <Button
               type="button"
               variant="outline"
-              onClick={() => navigate({ view: 'seller-listings' })}
+              onClick={() => router.push(routes.sellerListings())}
             >
               Cancel
             </Button>

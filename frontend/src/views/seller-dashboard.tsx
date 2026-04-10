@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -13,6 +15,7 @@ import {
   Wallet,
   ArrowUpRight,
   BarChart3,
+  Shield,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -27,25 +30,25 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate, getStatusColor, getStatusLabel } from '@/lib/helpers';
 import type { Order, SellerStats } from '@/types/api';
 
 export function SellerDashboardPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [dashboard, setDashboard] = useState<SellerStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
       return;
     }
     if (!user?.is_seller) {
       toast.error('You must be a seller to access the dashboard.');
-      navigate({ view: 'seller-register' });
+      router.push(routes.sellerRegister());
       return;
     }
 
@@ -60,7 +63,7 @@ export function SellerDashboardPage() {
       }
     }
     loadDashboard();
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   if (!isAuthenticated || !user) return null;
 
@@ -113,6 +116,13 @@ export function SellerDashboardPage() {
       color: 'text-purple-600 dark:text-purple-400',
       bg: 'bg-purple-100 dark:bg-purple-900/30',
     },
+    {
+      label: 'Escrow Balance',
+      value: formatTZS(dashboard?.escrow_balance ?? 0),
+      icon: Shield, // Need to ensure Shield is imported
+      color: 'text-teal-600 dark:text-teal-400',
+      bg: 'bg-teal-100 dark:bg-teal-900/30',
+    },
   ];
 
   return (
@@ -132,7 +142,7 @@ export function SellerDashboardPage() {
               Here&apos;s an overview of your seller performance.
             </p>
           </div>
-          <Button onClick={() => navigate({ view: 'seller-listings' })} className="gap-2 shrink-0">
+          <Button onClick={() => router.push(routes.sellerListingNew())} className="gap-2 shrink-0">
             <PlusCircle className="w-4 h-4" />
             Add New Listing
           </Button>
@@ -247,7 +257,7 @@ export function SellerDashboardPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-3 h-12"
-                  onClick={() => navigate({ view: 'seller-listings' })}
+                  onClick={() => router.push(routes.sellerListingNew())}
                 >
                   <div className="w-8 h-8 bg-primary/10 rounded-lg flex items-center justify-center shrink-0">
                     <PlusCircle className="w-4 h-4 text-primary" />
@@ -261,7 +271,7 @@ export function SellerDashboardPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-3 h-12"
-                  onClick={() => navigate({ view: 'seller-orders' })}
+                  onClick={() => router.push(routes.sellerOrders())}
                 >
                   <div className="w-8 h-8 bg-green-100 dark:bg-green-900/30 rounded-lg flex items-center justify-center shrink-0">
                     <ClipboardList className="w-4 h-4 text-green-600 dark:text-green-400" />
@@ -275,7 +285,7 @@ export function SellerDashboardPage() {
                 <Button
                   variant="outline"
                   className="w-full justify-start gap-3 h-12"
-                  onClick={() => navigate({ view: 'seller-payouts' })}
+                  onClick={() => router.push(routes.sellerPayouts())}
                 >
                   <div className="w-8 h-8 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center shrink-0">
                     <Wallet className="w-4 h-4 text-amber-600 dark:text-amber-400" />
@@ -307,7 +317,7 @@ export function SellerDashboardPage() {
                 variant="ghost"
                 size="sm"
                 className="gap-1.5"
-                onClick={() => navigate({ view: 'seller-orders' })}
+                onClick={() => router.push(routes.sellerOrders())}
               >
                 View All
                 <ArrowUpRight className="w-3.5 h-3.5" />
@@ -338,7 +348,7 @@ export function SellerDashboardPage() {
                         <TableRow
                           key={order.id}
                           className="cursor-pointer hover:bg-muted/50"
-                          onClick={() => navigate({ view: 'order-detail', id: String(order.id) })}
+                          onClick={() => router.push(routes.order(String(order.id)))}
                         >
                           <TableCell className="font-medium text-sm">
                             #{order.order_number.slice(-8)}

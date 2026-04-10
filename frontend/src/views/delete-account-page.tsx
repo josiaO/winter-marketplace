@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useRef, useCallback, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -28,7 +30,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { ApiClientError } from '@/lib/api-client';
 
@@ -38,7 +40,7 @@ const RESEND_COOLDOWN = 60; // seconds
 type Step = 'confirm' | 'otp' | 'deleting';
 
 export function DeleteAccountPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated, logout } = useAuthStore();
 
   const [step, setStep] = useState<Step>('confirm');
@@ -52,9 +54,9 @@ export function DeleteAccountPage() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, router]);
 
   // Cooldown timer
   useEffect(() => {
@@ -182,7 +184,7 @@ export function DeleteAccountPage() {
       await api.auth.deleteAccount();
       toast.success('Account deleted successfully.');
       logout();
-      navigate({ view: 'home' });
+      router.push(routes.home());
     } catch (err: unknown) {
       let message = 'Failed to delete account. Please try again.';
       if (err instanceof ApiClientError) {
@@ -243,7 +245,7 @@ export function DeleteAccountPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">Danger Zone</span>
               <button
-                onClick={() => navigate({ view: 'profile' })}
+                onClick={() => router.push(routes.profile())}
                 className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />

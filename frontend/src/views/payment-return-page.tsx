@@ -1,13 +1,15 @@
 'use client';
 
+import { useRouter, useSearchParams } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { ApiClientError } from '@/types/api';
+import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
 const PENDING_REF_KEY = 'sd_pending_txn_ref';
@@ -34,11 +36,13 @@ function resolveTransactionReference(
 }
 
 export function PaymentReturnPage() {
-  const { currentView, navigate } = useUIStore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const viewRef =
-    currentView.view === 'payment-return'
-      ? (currentView as { reference?: string }).reference
-      : undefined;
+    searchParams.get('reference') ||
+    searchParams.get('transaction_reference') ||
+    searchParams.get('ref') ||
+    undefined;
 
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>(
     'loading',
@@ -169,41 +173,47 @@ export function PaymentReturnPage() {
               </motion.div>
             )}
 
-            <div className="flex flex-col gap-2 pt-2">
-              {status === 'error' && txnRef && (
-                <Button className="w-full rounded-xl" onClick={handleRetry}>
-                  Try again
-                </Button>
-              )}
-              {status !== 'loading' && (
-                <>
+              {status === 'error' && (
+                <div className="flex flex-col gap-2">
+                  <Button className="w-full rounded-xl" onClick={handleRetry}>
+                    <Loader2 className={cn("w-4 h-4 mr-2", status !== 'loading' && "hidden")} />
+                    Retry Confirmation
+                  </Button>
                   {orderId && (
                     <Button
+                      variant="outline"
                       className="w-full rounded-xl"
-                      onClick={() =>
-                        navigate({ view: 'order-detail', id: orderId })
-                      }
+                      onClick={() => router.push(routes.order(String(orderId)))}
                     >
-                      View order
+                      Return to Order
                     </Button>
                   )}
-                  <Button
-                    variant="outline"
-                    className="w-full rounded-xl"
-                    onClick={() => navigate({ view: 'orders' })}
-                  >
-                    View all orders
-                  </Button>
-                </>
+                </div>
               )}
-              <Button
-                variant="ghost"
-                className="w-full rounded-xl text-sm"
-                onClick={() => navigate({ view: 'home' })}
-              >
-                Back to home
-              </Button>
-            </div>
+              {status === 'success' && (
+                <div className="flex flex-col gap-2">
+                  <Button
+                    className="w-full rounded-xl"
+                    onClick={() =>
+                      router.push(orderId ? routes.order(String(orderId)) : routes.orders())
+                    }
+                  >
+                    View Order Details
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    className="w-full rounded-xl text-sm"
+                    onClick={() => router.push(routes.home())}
+                  >
+                    Back to Shopping
+                  </Button>
+                </div>
+              )}
+              {status === 'loading' && (
+                 <p className="text-xs text-muted-foreground animate-pulse">
+                   Checking status with payment provider...
+                 </p>
+              )}
           </CardContent>
         </Card>
       </motion.div>

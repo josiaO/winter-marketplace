@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -27,7 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { EmptyState } from '@/components/smartdalali/empty-state';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { getRelativeTime } from '@/lib/helpers';
 import { toast } from 'sonner';
@@ -154,7 +156,7 @@ function SupportRequestCard({ request }: { request: SupportRequest }) {
 // ── Main Support Page ───────────────────────────────────────────────────────
 
 export function SupportPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
 
   const [requests, setRequests] = useState<SupportRequest[]>([]);
@@ -267,7 +269,7 @@ export function SupportPage() {
           title="Please login to contact support"
           description="You need to be logged in to submit a support request."
           actionLabel="Login"
-          onAction={() => navigate({ view: 'login' })}
+          onAction={() => router.push(routes.login())}
         />
       </div>
     );

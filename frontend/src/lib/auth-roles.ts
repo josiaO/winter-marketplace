@@ -1,5 +1,5 @@
 import type { User } from '@/types/api';
-import type { AppView, ViewName } from '@/store/ui-store';
+import { routes } from '@/lib/routes';
 
 /**
  * Mirrors backend `IsAdmin`: superuser or staff (`backend/core/permissions.py`).
@@ -25,22 +25,9 @@ export function canAccessSellerPortal(user: User | null | undefined): boolean {
 }
 
 /** Where to land after login / OTP verify once `user` is hydrated from `/accounts/me/`. */
-export function getPostLoginView(user: User | null | undefined): ViewName {
-  if (!user) return 'home';
-  if (canAccessAdminPortal(user)) return 'admin-dashboard';
-  if (canAccessSellerPortal(user)) return 'seller-dashboard';
-  return 'home';
-}
-
-/** Typed `AppView` for `navigate()` (no route params on these destinations). */
-export function getPostLoginAppView(user: User | null | undefined): AppView {
-  const v = getPostLoginView(user);
-  switch (v) {
-    case 'admin-dashboard':
-      return { view: 'admin-dashboard' };
-    case 'seller-dashboard':
-      return { view: 'seller-dashboard' };
-    default:
-      return { view: 'home' };
-  }
+export function getPostLoginPath(user: User | null | undefined): string {
+  if (!user) return routes.home();
+  if (canAccessAdminPortal(user)) return routes.adminDashboard();
+  if (canAccessSellerPortal(user)) return routes.sellerDashboard();
+  return routes.home();
 }

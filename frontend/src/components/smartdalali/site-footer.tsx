@@ -1,12 +1,20 @@
 'use client';
 
 import { ShoppingBag, Facebook, Twitter, Instagram, Youtube, Mail, Phone, MapPin } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { Separator } from '@/components/ui/separator';
-import { useUIStore } from '@/store';
-import type { AppView } from '@/types';
+import { routes } from '@/lib/routes';
 
 export function SiteFooter() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
+
+  const quickLinks: { label: string; href: string }[] = [
+    { label: 'Home', href: routes.home() },
+    { label: 'Categories', href: routes.home() },
+    { label: 'Sell on SmartDalali', href: routes.sellerRegister() },
+    { label: 'My Orders', href: routes.orders() },
+    { label: 'My Profile', href: routes.profile() },
+  ];
 
   return (
     <footer className="border-t bg-muted/30 mt-auto">
@@ -62,16 +70,11 @@ export function SiteFooter() {
               Quick Links
             </h4>
             <ul className="space-y-2.5">
-              {([
-                { label: 'Home', view: 'home' },
-                { label: 'Categories', view: 'home' },
-                { label: 'Sell on SmartDalali', view: 'seller-register' },
-                { label: 'My Orders', view: 'orders' },
-                { label: 'My Profile', view: 'profile' },
-              ] as { label: string; view: AppView['view'] }[]).map((link) => (
+              {quickLinks.map((link) => (
                 <li key={link.label}>
                   <button
-                    onClick={() => navigate({ view: link.view } as AppView)}
+                    type="button"
+                    onClick={() => router.push(link.href)}
                     className="text-sm text-muted-foreground hover:text-primary transition-colors"
                   >
                     {link.label}
@@ -97,7 +100,8 @@ export function SiteFooter() {
               ].map((cat) => (
                 <li key={cat}>
                   <button
-                    onClick={() => navigate({ view: 'home' })}
+                    type="button"
+                    onClick={() => router.push(routes.home())}
                     className="text-sm text-muted-foreground hover:text-primary transition-colors"
                   >
                     {cat}

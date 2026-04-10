@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -38,9 +40,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, getRelativeTime } from '@/lib/helpers';
+import { EmptyState } from '@/components/smartdalali/empty-state';
 import type { Listing, PaginatedResponse } from '@/types/api';
 
 const PAGE_SIZE = 20;
@@ -67,7 +70,7 @@ function statusBadgeClass(status: string) {
 // ---------------------------------------------------------------------------
 
 export function AdminListingsPage() {
-  const navigate = useUIStore((s) => s.navigate);
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -100,11 +103,11 @@ export function AdminListingsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
     fetchListings();
-  }, [isAuthenticated, user, navigate, fetchListings]);
+  }, [isAuthenticated, user, router, fetchListings]);
 
   // ── Actions ────────────────────────────────────────────────────────────
   const handleToggleVerified = async (id: number) => {
@@ -163,7 +166,7 @@ export function AdminListingsPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'admin-dashboard' })}
+            onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Dashboard
@@ -206,11 +209,11 @@ export function AdminListingsPage() {
                       ))}
                     </div>
                   ) : listings.length === 0 ? (
-                    <div className="text-center py-16">
-                      <Package className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                      <h3 className="font-semibold text-foreground text-lg mb-1">No listings found</h3>
-                      <p className="text-sm text-muted-foreground">Try adjusting your search or filter.</p>
-                    </div>
+                    <EmptyState
+                      icon={Package}
+                      title="No listings found"
+                      description="Try adjusting your search or filter to find what you're looking for."
+                    />
                   ) : (
                     <>
                       {/* ── Desktop Table ──────────────────────────────────── */}
@@ -305,7 +308,7 @@ export function AdminListingsPage() {
                                       </DropdownMenuTrigger>
                                       <DropdownMenuContent align="end">
                                         <DropdownMenuItem
-                                          onClick={() => navigate({ view: 'product', id: String(listing.id) })}
+                                          onClick={() => router.push(routes.product(String(listing.id)))}
                                         >
                                           <Eye className="w-4 h-4 mr-2" />
                                           View Listing

@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -27,16 +29,16 @@ import {
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
 import { EmptyState } from '@/components/smartdalali/empty-state';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatDate } from '@/lib/helpers';
 import { toast } from 'sonner';
 import type { Listing, Store as StoreType } from '@/types/api';
 
-export function StorePage() {
-  const { currentView, navigate } = useUIStore();
+export function StorePage({ storeSlug }: { storeSlug: string }) {
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
-  const slug = currentView.view === 'store' ? currentView.slug : '';
+  const slug = storeSlug;
 
   const [store, setStore] = useState<StoreType | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
@@ -102,8 +104,8 @@ export function StorePage() {
   }, [isAuthenticated, store, isFollowing]);
 
   const handleProductSelect = useCallback(
-    (listing: Listing) => navigate({ view: 'product', id: String(listing.id) }),
-    [navigate]
+    (listing: Listing) => router.push(routes.product(String(listing.id))),
+    [router]
   );
 
   if (isLoading) {
@@ -131,7 +133,7 @@ export function StorePage() {
           title="Store not found"
           description="The store you're looking for doesn't exist or has been removed."
           actionLabel="Go Home"
-          onAction={() => navigate({ view: 'home' })}
+          onAction={() => router.push(routes.home())}
         />
       </div>
     );
@@ -145,7 +147,7 @@ export function StorePage() {
           <BreadcrumbItem>
             <BreadcrumbLink
               className="cursor-pointer text-sm flex items-center gap-1"
-              onClick={() => navigate({ view: 'home' })}
+              onClick={() => router.push(routes.home())}
             >
               <Home className="w-3.5 h-3.5" />
               Home
@@ -265,7 +267,7 @@ export function StorePage() {
             title="No products yet"
             description="This store hasn't listed any products yet."
             actionLabel="Browse Marketplace"
-            onAction={() => navigate({ view: 'home' })}
+            onAction={() => router.push(routes.home())}
           />
         ) : (
           <>

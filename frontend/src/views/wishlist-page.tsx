@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -16,21 +18,24 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { EmptyState } from '@/components/smartdalali/empty-state';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS } from '@/lib/helpers';
 import { toast } from 'sonner';
-import type { WishlistItem } from '@/types/api';
+import { ApiClientError, type WishlistItem } from '@/types/api';
 import { cn } from '@/lib/utils';
 
 export function WishlistPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
 
   const [items, setItems] = useState<WishlistItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [addedToCart, setAddedToCart] = useState<Record<number, boolean>>({});
+  const [cartAddingListingId, setCartAddingListingId] = useState<number | null>(
+    null,
+  );
 
   const fetchWishlist = useCallback(async () => {
     if (!isAuthenticated) {
@@ -79,8 +84,10 @@ export function WishlistPage() {
 
   const handleAddToCart = async (e: React.MouseEvent, listingId: number) => {
     e.stopPropagation();
+    if (cartAddingListingId != null) return;
+    setCartAddingListingId(listingId);
     try {
-      await api.commerce.cartAddItem({ listing_id: listingId });
+      await api.commerce.cartAddItem({ listing_id: listingId, quantity: 1 });
       setAddedToCart((prev) => ({ ...prev, [listingId]: true }));
       toast.success('Added to cart!');
       setTimeout(() => {
@@ -90,8 +97,22 @@ export function WishlistPage() {
           return next;
         });
       }, 2000);
-    } catch {
-      toast.error('Failed to add to cart');
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        if (err.status === 400 || err.status === 409) {
+          toast.error(
+            err.detail ||
+              err.message ||
+              'Not enough stock or invalid quantity.',
+          );
+        } else {
+          toast.error(err.detail || err.message || 'Failed to add to cart');
+        }
+      } else {
+        toast.error('Failed to add to cart');
+      }
+    } finally {
+      setCartAddingListingId(null);
     }
   };
 
@@ -112,7 +133,7 @@ export function WishlistPage() {
           title="Please login to view wishlist"
           description="You need to be logged in to view and manage your saved items."
           actionLabel="Login"
-          onAction={() => navigate({ view: 'login' })}
+          onAction={() => router.push(routes.login())}
         />
       </div>
     );
@@ -133,7 +154,7 @@ export function WishlistPage() {
             title="Your wishlist is empty"
             description="Save items you love to your wishlist. They'll appear here so you can easily find them later."
             actionLabel="Explore Products"
-            onAction={() => navigate({ view: 'home' })}
+            onAction={() => router.push(routes.home())}
           />
         </motion.div>
       </div>
@@ -177,7 +198,7 @@ export function WishlistPage() {
                   {/* Image */}
                   <div
                     className="relative aspect-square overflow-hidden bg-muted cursor-pointer"
-                    onClick={() => navigate({ view: 'product', id: String(listing.id) })}
+                    onClick={() => router.push(routes.product(String(listing.id)))}
                   >
                     {primaryImage?.image ? (
                       <Image
@@ -234,7 +255,7 @@ export function WishlistPage() {
                     {/* Title */}
                     <h3
                       className="font-medium text-sm leading-snug line-clamp-2 text-foreground group-hover:text-primary transition-colors cursor-pointer"
-                      onClick={() => navigate({ view: 'product', id: String(listing.id) })}
+                      onClick={() => router.push(routes.product(String(listing.id)))}
                     >
                       {listing.title}
                     </h3>
@@ -267,12 +288,19 @@ export function WishlistPage() {
                             : 'bg-primary hover:bg-primary/90 text-primary-foreground'
                         )}
                         onClick={(e) => handleAddToCart(e, listing.id)}
+                        disabled={
+                          cartAddingListingId === listing.id ||
+                          (typeof listing.stock_quantity === 'number' &&
+                            listing.stock_quantity < 1)
+                        }
                       >
                         {addedToCart[listing.id] ? (
                           <>
                             <Check className="w-4 h-4 mr-1" />
                             Added
                           </>
+                        ) : cartAddingListingId === listing.id ? (
+                          <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin mx-auto" />
                         ) : (
                           <>
                             <ShoppingCart className="w-4 h-4 mr-1" />

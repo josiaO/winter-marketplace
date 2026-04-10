@@ -1,9 +1,11 @@
 'use client';
 
 import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { useAuthStore, useUIStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { canAccessAdminPortal, canAccessSellerPortal } from '@/lib/auth-roles';
+import { routes } from '@/lib/routes';
 
 export type RoleGuardKind = 'admin' | 'seller';
 
@@ -14,27 +16,27 @@ interface RoleGuardProps {
 
 export function RoleGuard({ kind, children }: RoleGuardProps) {
   const { user, isAuthenticated, isLoading } = useAuthStore();
-  const { navigate } = useUIStore();
+  const router = useRouter();
 
   useEffect(() => {
     if (isLoading) return;
 
     if (!isAuthenticated || !user) {
-      navigate({ view: 'login' });
+      router.replace(routes.login());
       return;
     }
 
     if (kind === 'admin' && !canAccessAdminPortal(user)) {
       toast.error('You do not have access to the admin area.');
-      navigate({ view: 'home' });
+      router.replace(routes.home());
       return;
     }
 
     if (kind === 'seller' && !canAccessSellerPortal(user)) {
       toast.error('Seller access is required for this area.');
-      navigate({ view: 'seller-register' });
+      router.replace(routes.sellerRegister());
     }
-  }, [kind, isAuthenticated, user, isLoading, navigate]);
+  }, [kind, isAuthenticated, user, isLoading, router]);
 
   if (isLoading) {
     return (

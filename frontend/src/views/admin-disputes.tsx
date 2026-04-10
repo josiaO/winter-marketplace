@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -44,7 +46,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useUIStore, useAuthStore } from '@/store';
+import { EmptyState } from '@/components/smartdalali/empty-state';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate, getRelativeTime, getInitials } from '@/lib/helpers';
 import type { Order, DisputeStatus, PaginatedResponse } from '@/types/api';
@@ -296,7 +299,7 @@ function DisputeCard({
 }
 
 export function AdminDisputesPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [allOrders, setAllOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -327,7 +330,7 @@ export function AdminDisputesPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
     fetchOrders();
@@ -399,7 +402,7 @@ export function AdminDisputesPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'admin-dashboard' })}
+            onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Back to Dashboard
@@ -522,17 +525,15 @@ export function AdminDisputesPage() {
                         ))}
                       </div>
                     ) : filteredOrders.length === 0 ? (
-                      <div className="text-center py-16">
-                        <AlertTriangle className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                        <h3 className="font-semibold text-foreground text-lg mb-1">
-                          No {tab.replace('_', ' ')} disputes
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {tab === 'open'
+                      <EmptyState
+                        icon={AlertTriangle}
+                        title={`No ${tab.replace('_', ' ')} disputes`}
+                        description={
+                          tab === 'open'
                             ? 'All disputes have been addressed.'
-                            : `No disputes with status "${tab.replace('_', ' ')}".`}
-                        </p>
-                      </div>
+                            : `No disputes with status "${tab.replace('_', ' ')}".`
+                        }
+                      />
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <AnimatePresence mode="popLayout">

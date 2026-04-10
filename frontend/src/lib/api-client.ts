@@ -683,6 +683,10 @@ class ApiClient {
           : {}),
       });
     },
+    
+    /** POST /commerce/orders/:id/mark_arrived/ */
+    markArrived: (id: number | string): Promise<{ success: boolean; order: Order }> =>
+      this.post(`/commerce/orders/${id}/mark_arrived/`),
 
     /** POST /commerce/orders/:id/open_dispute/ */
     openDispute: (id: number | string, payload: CreateDisputePayload & { dispute_reason: string }): Promise<{ success: boolean; order: Order }> => {
@@ -820,6 +824,27 @@ class ApiClient {
     /** GET /sellers/verification/identity/status/ */
     identityVerificationStatus: (): Promise<unknown> =>
       this.get('/sellers/verification/identity/status/'),
+
+    /** POST /sellers/verification/business/ (multipart) */
+    submitBusinessVerification: (payload: {
+      business_name: string;
+      business_registration_no?: string;
+      tin_number?: string;
+      business_certificate?: File;
+      bank_account_number?: string;
+      bank_name?: string;
+      bank_account_name?: string;
+    }): Promise<unknown> => {
+      const fd = new FormData();
+      fd.append('business_name', payload.business_name);
+      if (payload.business_registration_no) fd.append('business_registration_no', payload.business_registration_no);
+      if (payload.tin_number) fd.append('tin_number', payload.tin_number);
+      if (payload.business_certificate) fd.append('business_certificate', payload.business_certificate);
+      if (payload.bank_account_number) fd.append('bank_account_number', payload.bank_account_number);
+      if (payload.bank_name) fd.append('bank_name', payload.bank_name);
+      if (payload.bank_account_name) fd.append('bank_account_name', payload.bank_account_name);
+      return this.post('/sellers/verification/business/', fd);
+    },
   };
 
   // ===========================================================================
@@ -887,6 +912,20 @@ class ApiClient {
     /** PATCH /trust/reviews/:id/ (seller_reply only) */
     replyReview: (id: number | string, payload: { seller_reply: string }): Promise<Review> =>
       this.patch(`/trust/reviews/${id}/`, payload),
+
+    /** ── Admin Verification Actions ────────────────────────────────────────── */
+
+    /** POST /trust/verifications/:id/verify_id/ (admin) */
+    approveVerificationId: (id: number | string, payload: { status: 'approved' | 'rejected' | 'pending'; notes?: string }): Promise<void> =>
+      this.post(`/trust/verifications/${id}/verify_id/`, payload),
+
+    /** POST /trust/verifications/:id/verify_tin/ (admin) */
+    approveVerificationTin: (id: number | string, payload: { status: 'approved' | 'rejected' | 'pending'; notes?: string }): Promise<void> =>
+      this.post(`/trust/verifications/${id}/verify_tin/`, payload),
+
+    /** POST /trust/verifications/:id/verify_license/ (admin) */
+    approveVerificationLicense: (id: number | string, payload: { status: 'approved' | 'rejected' | 'pending'; notes?: string }): Promise<void> =>
+      this.post(`/trust/verifications/${id}/verify_license/`, payload),
   };
 
   // ===========================================================================
@@ -942,6 +981,24 @@ class ApiClient {
       params?: Record<string, string | number | boolean | null | undefined>,
     ): Promise<PaginatedResponse<Notification>> =>
       this.get('/communications/notifications/', params),
+
+    /** GET /communications/support-requests/ */
+    supportRequests: (
+      params?: Record<string, string | number | boolean | null | undefined>,
+    ): Promise<PaginatedResponse<SupportRequest>> =>
+      this.get('/communications/support-requests/', params),
+
+    /** POST /communications/support-requests/ */
+    createSupportRequest: (payload: CreateSupportRequestPayload): Promise<SupportRequest> =>
+      this.post('/communications/support-requests/', payload),
+
+    /** GET /communications/support-requests/:id/ */
+    supportRequestDetail: (id: number | string): Promise<SupportRequest> =>
+      this.get(`/communications/support-requests/${id}/`),
+
+    /** PATCH /communications/support-requests/:id/ */
+    updateSupportRequest: (id: number | string, payload: UpdateSupportRequestPayload): Promise<SupportRequest> =>
+      this.patch(`/communications/support-requests/${id}/`, payload),
 
     /** POST /communications/notifications/mark-all-read/ */
     markAllNotificationsRead: (): Promise<{ success: boolean }> =>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import { ShoppingBag, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
@@ -10,8 +10,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUIStore, useAuthStore } from '@/store';
-import { getPostLoginAppView } from '@/lib/auth-roles';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store';
+import { getPostLoginPath } from '@/lib/auth-roles';
+import { routes } from '@/lib/routes';
 
 interface LoginFormValues {
   email: string;
@@ -21,8 +23,14 @@ interface LoginFormValues {
 export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
-  const { navigate } = useUIStore();
-  const { login, isLoading } = useAuthStore();
+  const router = useRouter();
+  const { login, isLoading, isAuthenticated, user } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace(getPostLoginPath(user));
+    }
+  }, [isAuthenticated, user, router]);
 
   const {
     register,
@@ -36,7 +44,7 @@ export function LoginPage() {
       await login(data.email, data.password);
       toast.success('Welcome back! Logged in successfully.');
       const u = useAuthStore.getState().user;
-      navigate(getPostLoginAppView(u));
+      router.replace(getPostLoginPath(u));
     } catch (err: unknown) {
       let message = 'Login failed. Please check your credentials.';
       if (err instanceof Error) {
@@ -58,7 +66,7 @@ export function LoginPage() {
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
           <button
-            onClick={() => navigate({ view: 'home' })}
+            onClick={() => router.push(routes.home())}
             className="flex items-center gap-3 group mb-2"
           >
             <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:scale-105 transition-transform">
@@ -129,7 +137,7 @@ export function LoginPage() {
                   </Label>
                   <button
                     type="button"
-                    onClick={() => navigate({ view: 'forgot-password' })}
+                    onClick={() => router.push(routes.forgotPassword())}
                     className="text-xs text-emerald-600 hover:text-emerald-700 font-medium hover:underline"
                   >
                     Forgot password?
@@ -184,7 +192,7 @@ export function LoginPage() {
             <p className="text-sm text-muted-foreground">
               Don&apos;t have an account?{' '}
               <button
-                onClick={() => navigate({ view: 'register' })}
+                onClick={() => router.push(routes.register())}
                 className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline"
               >
                 Register

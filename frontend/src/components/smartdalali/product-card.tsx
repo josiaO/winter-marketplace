@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { ShoppingCart, Check, ShieldCheck, Package } from 'lucide-react';
+import { ShoppingCart, Check, ShieldCheck, Package, Heart, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuthStore } from '@/store';
@@ -11,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { formatTZS, truncateText } from '@/lib/helpers';
 import { api } from '@/lib/api-client';
 import { toast } from 'sonner';
-import type { Listing } from '@/types/api';
+import { ApiClientError, type Listing } from '@/types/api';
 
 interface ProductCardProps {
   listing: Listing;
@@ -22,27 +22,70 @@ interface ProductCardProps {
 export function ProductCard({ listing, onSelect, className }: ProductCardProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [addedToCart, setAddedToCart] = useState(false);
+  const [isFavoriting, setIsFavoriting] = useState(false);
+  const [isFavorite, setIsFavorite] = useState(listing.is_liked || false);
+  const [quantity, setQuantity] = useState(1);
   const { isAuthenticated } = useAuthStore();
 
   const primaryImage = listing.images?.find((img) => img.is_primary) || listing.images?.[0];
 
   const handleAddToCart = async (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isAdding) return;
     if (!isAuthenticated) {
       toast.error('Please login to add items to cart');
+      return;
+    }
+    const stock = listing.stock_quantity;
+    if (typeof stock === 'number' && stock < 1) {
+      toast.error('This item is out of stock');
       return;
     }
 
     setIsAdding(true);
     try {
-      await api.commerce.cartAddItem({ listing_id: listing.id });
+      await api.commerce.cartAddItem({ listing_id: listing.id, quantity });
       setAddedToCart(true);
-      toast.success('Added to cart!');
+      toast.success(`Added ${quantity} item(s) to cart!`);
       setTimeout(() => setAddedToCart(false), 2000);
-    } catch {
-      toast.error('Failed to add to cart');
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        if (err.status === 400 || err.status === 409) {
+          toast.error(
+            err.detail ||
+              err.message ||
+              'Not enough stock or invalid quantity.',
+          );
+        } else if (err.status === 401) {
+          toast.error('Session expired. Please login again.');
+        } else {
+          toast.error(err.detail || err.message || 'Failed to add to cart');
+        }
+      } else {
+        toast.error('Failed to add to cart due to a network error');
+      }
     } finally {
       setIsAdding(false);
+    }
+  };
+
+  const handleToggleFavorite = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isFavoriting) return;
+    if (!isAuthenticated) {
+      toast.error('Please login to save favorites');
+      return;
+    }
+
+    setIsFavoriting(true);
+    try {
+      const res = await api.listings.toggleLike(listing.id);
+      setIsFavorite(res.status === 'liked');
+      toast.success(res.status === 'liked' ? 'Saved to favorites' : 'Removed from favorites');
+    } catch {
+      toast.error('Failed to update favorites');
+    } finally {
+      setIsFavoriting(false);
     }
   };
 
@@ -99,6 +142,20 @@ export function ProductCard({ listing, onSelect, className }: ProductCardProps) 
             Featured
           </Badge>
         )}
+
+        {/* Favorite Button */}
+        <button
+          onClick={handleToggleFavorite}
+          disabled={isFavoriting}
+          className={cn(
+            'absolute bottom-2 right-2 w-8 h-8 rounded-full flex items-center justify-center shadow-sm transition-all',
+            isFavorite
+              ? 'bg-red-500 text-white'
+              : 'bg-white/80 text-gray-600 hover:bg-white dark:bg-black/60 dark:text-gray-300'
+          )}
+        >
+          <Heart className={cn('w-4 h-4', isFavorite && 'fill-current')} />
+        </button>
       </div>
 
       {/* Content */}
@@ -130,32 +187,62 @@ export function ProductCard({ listing, onSelect, className }: ProductCardProps) 
           <span className="text-xs text-muted-foreground">{listing.city}</span>
         )}
 
-        {/* Add to Cart */}
-        <Button
-          size="sm"
-          className={cn(
-            'w-full mt-1 rounded-lg text-xs h-9 transition-all duration-300',
-            addedToCart
-              ? 'bg-emerald-600 hover:bg-emerald-600 text-white'
-              : 'bg-primary hover:bg-primary/90 text-primary-foreground'
-          )}
-          onClick={handleAddToCart}
-          disabled={isAdding}
-        >
-          {addedToCart ? (
-            <>
-              <Check className="w-4 h-4 mr-1" />
-              Added
-            </>
-          ) : isAdding ? (
-            <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
-          ) : (
-            <>
-              <ShoppingCart className="w-4 h-4 mr-1" />
-              Add to Cart
-            </>
-          )}
-        </Button>
+        {/* Quantity and Add to Cart */}
+        <div className="flex items-center gap-2 mt-2">
+          <div className="flex items-center border rounded-lg bg-muted/30">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setQuantity(Math.max(1, quantity - 1));
+              }}
+              className="px-2 py-1 hover:bg-muted rounded-l-lg transition-colors"
+              disabled={quantity <= 1 || isAdding}
+            >
+              <Minus className="w-3 h-3" />
+            </button>
+            <span className="w-6 text-center text-xs font-medium">{quantity}</span>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setQuantity(Math.min(listing.stock_quantity || 99, quantity + 1));
+              }}
+              className="px-2 py-1 hover:bg-muted rounded-r-lg transition-colors"
+              disabled={quantity >= (listing.stock_quantity || 99) || isAdding}
+            >
+              <Plus className="w-3 h-3" />
+            </button>
+          </div>
+
+          <Button
+            size="sm"
+            className={cn(
+              'flex-1 rounded-lg text-xs h-9 transition-all duration-300',
+              addedToCart
+                ? 'bg-emerald-600 hover:bg-emerald-600 text-white'
+                : 'bg-primary hover:bg-primary/90 text-primary-foreground'
+            )}
+            onClick={handleAddToCart}
+            disabled={
+              isAdding ||
+              (typeof listing.stock_quantity === 'number' &&
+                listing.stock_quantity < 1)
+            }
+          >
+            {addedToCart ? (
+              <>
+                <Check className="w-4 h-4 mr-1" />
+                Added
+              </>
+            ) : isAdding ? (
+              <div className="w-4 h-4 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <>
+                <ShoppingCart className="w-4 h-4 mr-1" />
+                Add
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     </motion.div>
   );

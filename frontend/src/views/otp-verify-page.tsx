@@ -15,8 +15,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUIStore, useAuthStore } from '@/store';
-import { getPostLoginAppView } from '@/lib/auth-roles';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useAuthStore } from '@/store';
+import { getPostLoginPath } from '@/lib/auth-roles';
+import { routes } from '@/lib/routes';
 import type { User } from '@/types/api';
 import { api } from '@/lib/api-client';
 import { ApiClientError } from '@/lib/api-client';
@@ -25,9 +27,16 @@ const OTP_LENGTH = 6;
 const RESEND_COOLDOWN = 60; // seconds
 
 export function OtpVerifyPage() {
-  const { currentView, navigate } = useUIStore();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const email = (searchParams.get('email') || '').trim();
+  const { isAuthenticated, user: authUser } = useAuthStore();
 
-  const email = currentView.view === 'otp-verify' ? currentView.email : '';
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace(getPostLoginPath(authUser));
+    }
+  }, [isAuthenticated, authUser, router]);
   const [otp, setOtp] = useState<string[]>(Array(OTP_LENGTH).fill(''));
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
@@ -126,11 +135,11 @@ export function OtpVerifyPage() {
         });
       } catch {
         toast.error('Verified, but we could not load your profile. Try signing in.');
-        navigate({ view: 'login' });
+        router.replace(routes.login());
         return;
       }
       toast.success('Email verified successfully! Welcome to SmartDalali.');
-      navigate(getPostLoginAppView(profile));
+      router.replace(getPostLoginPath(profile));
     } catch (err: unknown) {
       let message = 'Verification failed. Please check your OTP and try again.';
       if (err instanceof ApiClientError) {
@@ -182,7 +191,7 @@ export function OtpVerifyPage() {
             <p className="text-muted-foreground">No email address provided for verification.</p>
             <Button
               variant="outline"
-              onClick={() => navigate({ view: 'login' })}
+              onClick={() => router.push(routes.login())}
               className="bg-emerald-600 hover:bg-emerald-700 text-white border-0"
             >
               Go to Login
@@ -204,7 +213,7 @@ export function OtpVerifyPage() {
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
           <button
-            onClick={() => navigate({ view: 'home' })}
+            onClick={() => router.push(routes.home())}
             className="flex items-center gap-3 group mb-2"
           >
             <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:scale-105 transition-transform">
@@ -325,7 +334,7 @@ export function OtpVerifyPage() {
 
             {/* Back to login */}
             <button
-              onClick={() => navigate({ view: 'login' })}
+              onClick={() => router.push(routes.login())}
               className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
             >
               <ArrowLeft className="w-3.5 h-3.5" />

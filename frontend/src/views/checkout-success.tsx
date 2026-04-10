@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { CheckCircle2, Package, MapPin, ArrowRight, ClipboardList } from 'lucide-react';
@@ -7,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
-import { useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate, orderNumberLabel, orderTotalAmount } from '@/lib/helpers';
 import type { Order } from '@/types/api';
@@ -46,9 +47,8 @@ function Confetti() {
   );
 }
 
-export function CheckoutSuccessPage() {
-  const { currentView, navigate } = useUIStore();
-  const orderId = currentView.view === 'checkout-success' ? currentView.orderId : '';
+export function CheckoutSuccessPage({ orderId }: { orderId: string }) {
+  const router = useRouter();
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(!!orderId);
 
@@ -165,7 +165,7 @@ export function CheckoutSuccessPage() {
         <div className="flex flex-col sm:flex-row gap-3">
           <Button
             className="flex-1 rounded-xl h-12 text-base font-semibold"
-            onClick={() => navigate({ view: 'orders' })}
+            onClick={() => router.push(routes.orders())}
           >
             <ClipboardList className="w-5 h-5 mr-2" />
             View My Orders
@@ -173,7 +173,7 @@ export function CheckoutSuccessPage() {
           <Button
             variant="outline"
             className="flex-1 rounded-xl h-12 text-base font-semibold"
-            onClick={() => navigate({ view: 'home' })}
+            onClick={() => router.push(routes.home())}
           >
             Continue Shopping
             <ArrowRight className="w-4 h-4 ml-2" />

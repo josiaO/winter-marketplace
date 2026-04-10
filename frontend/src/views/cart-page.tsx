@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Image from 'next/image';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -26,16 +28,17 @@ import {
 } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/smartdalali/empty-state';
 import { PriceDisplay } from '@/components/smartdalali/price-display';
-import { useUIStore, useAuthStore, useCartStore } from '@/store';
+import { useAuthStore, useCartStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { adaptDjangoCart } from '@/lib/django-cart-adapter';
 import { formatTZS } from '@/lib/helpers';
 import { toast } from 'sonner';
+import { ApiClientError } from '@/types/api';
 
 // ---------------------------------------------------------------------------
 
 export function CartPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { cart, setCart } = useCartStore();
   const [serverCartTotal, setServerCartTotal] = useState<number>(0);
@@ -43,7 +46,11 @@ export function CartPage() {
   const [isRemoving, setIsRemoving] = useState<string | null>(null);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [quantityBusyByLine, setQuantityBusyByLine] = useState<
+    Record<string, boolean>
+  >({});
+  const queueRef = useRef<Promise<void>>(Promise.resolve());
+  const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
   /** Fetch Django cart, adapt, and push into the store. */
   const fetchAndSetCart = useCallback(async () => {
@@ -51,8 +58,12 @@ export function CartPage() {
       const djangoCart = await api.commerce.cart();
       setServerCartTotal(Number(djangoCart.total));
       setCart(adaptDjangoCart(djangoCart));
-    } catch {
-      toast.error('Failed to load cart');
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to load cart';
+      toast.error(msg);
     }
   }, [setCart]);
 
@@ -65,46 +76,95 @@ export function CartPage() {
     fetchAndSetCart().finally(() => setIsLoading(false));
   }, [isAuthenticated, fetchAndSetCart]);
 
+  useEffect(() => {
+    return () => {
+      // Cleanup all debounces
+      Object.values(debounceRef.current).forEach(clearTimeout);
+    };
+  }, []);
+
+  const setLineQuantityBusy = useCallback((lineId: string, busy: boolean) => {
+    setQuantityBusyByLine((prev) => {
+      const next = { ...prev };
+      if (busy) next[lineId] = true;
+      else delete next[lineId];
+      return next;
+    });
+  }, []);
+
+  /**
+   * Processes a cart action sequentially to prevent race conditions
+   * where multiple in-flight requests clobber each other's state updates.
+   */
+  const enqueueCartAction = useCallback((action: () => Promise<void>) => {
+    queueRef.current = queueRef.current.then(action).catch((err) => {
+      console.error('Cart action failed:', err);
+    });
+    return queueRef.current;
+  }, []);
+
   const handleUpdateQuantity = useCallback(
     (cartItemId: string, listingId: string, newQuantity: number) => {
       if (!isAuthenticated) return;
 
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
+      // Optimistically update the store if possible, 
+      // but for now we'll rely on the queue to keep it safe.
+      
+      if (debounceRef.current[cartItemId]) {
+        clearTimeout(debounceRef.current[cartItemId]);
       }
 
-      debounceRef.current = setTimeout(async () => {
-        try {
-          const djangoCart = await api.commerce.cartSetItemQuantity(
-            cartItemId,
-            listingId,
-            newQuantity,
-          );
-          setServerCartTotal(Number(djangoCart.total));
-          setCart(adaptDjangoCart(djangoCart));
-        } catch {
-          toast.error('Failed to update quantity');
-        }
-      }, 400);
+      debounceRef.current[cartItemId] = setTimeout(() => {
+        enqueueCartAction(async () => {
+          setLineQuantityBusy(cartItemId, true);
+          try {
+            const djangoCart = await api.commerce.cartSetItemQuantity(
+              cartItemId,
+              listingId,
+              newQuantity,
+            );
+            setServerCartTotal(Number(djangoCart.total));
+            setCart(adaptDjangoCart(djangoCart));
+          } catch (err: unknown) {
+            const msg =
+              err instanceof ApiClientError
+                ? err.detail ||
+                  err.message ||
+                  'Could not update quantity (check stock).'
+                : 'Failed to update quantity';
+            toast.error(msg);
+            await fetchAndSetCart();
+          } finally {
+            setLineQuantityBusy(cartItemId, false);
+          }
+        });
+      }, 300);
     },
-    [isAuthenticated, setCart],
+    [isAuthenticated, setCart, setLineQuantityBusy, fetchAndSetCart, enqueueCartAction],
   );
 
   const handleConfirmRemove = useCallback(async () => {
     if (!isAuthenticated || !itemToRemove) return;
-    setIsRemoving(itemToRemove);
-    try {
-      await api.commerce.cartRemoveItem({ item_id: itemToRemove });
-      await fetchAndSetCart();
-      toast.success('Item removed from cart');
-    } catch {
-      toast.error('Failed to remove item');
-    } finally {
-      setIsRemoving(null);
-      setRemoveDialogOpen(false);
-      setItemToRemove(null);
-    }
-  }, [isAuthenticated, itemToRemove, fetchAndSetCart]);
+    
+    enqueueCartAction(async () => {
+      setIsRemoving(itemToRemove);
+      try {
+        await api.commerce.cartRemoveItem({ item_id: itemToRemove });
+        await fetchAndSetCart();
+        toast.success('Item removed from cart');
+      } catch (err: unknown) {
+        const msg =
+          err instanceof ApiClientError
+            ? err.detail || err.message
+            : 'Failed to remove item';
+        toast.error(msg);
+      } finally {
+        setIsRemoving(null);
+        setRemoveDialogOpen(false);
+        setItemToRemove(null);
+      }
+    });
+  }, [isAuthenticated, itemToRemove, fetchAndSetCart, enqueueCartAction]);
 
   const items = cart?.items || [];
 
@@ -139,7 +199,7 @@ export function CartPage() {
           title="Please login to view your cart"
           description="You need to be logged in to manage your shopping cart."
           actionLabel="Login"
-          onAction={() => navigate({ view: 'login' })}
+          onAction={() => router.push(routes.login())}
         />
       </div>
     );
@@ -153,7 +213,7 @@ export function CartPage() {
           title="Your cart is empty"
           description="Looks like you haven't added any items to your cart yet."
           actionLabel="Continue Shopping"
-          onAction={() => navigate({ view: 'home' })}
+          onAction={() => router.push(routes.home())}
         />
       </div>
     );
@@ -173,7 +233,9 @@ export function CartPage() {
           {/* Cart Items */}
           <div className="lg:col-span-2 space-y-3">
             <AnimatePresence>
-              {items.map((item) => (
+              {items.map((item) => {
+                const qtyBusy = Boolean(quantityBusyByLine[item.id]);
+                return (
                 <motion.div
                   key={item.id}
                   layout
@@ -186,7 +248,7 @@ export function CartPage() {
                   <div
                     className="relative w-20 h-20 sm:w-24 sm:h-24 rounded-lg overflow-hidden bg-muted flex-shrink-0 cursor-pointer"
                     onClick={() =>
-                      navigate({ view: 'product', id: item.listing.id })
+                      router.push(routes.product(String(item.listing.id)))
                     }
                   >
                     {item.listing.images?.[0]?.url || item.listing.image ? (
@@ -213,7 +275,7 @@ export function CartPage() {
                     <h3
                       className="text-sm sm:text-base font-medium text-foreground line-clamp-2 cursor-pointer hover:text-primary transition-colors"
                       onClick={() =>
-                        navigate({ view: 'product', id: item.listing.id })
+                        router.push(routes.product(String(item.listing.id)))
                       }
                     >
                       {item.listing.title}
@@ -238,7 +300,7 @@ export function CartPage() {
                               Math.max(1, item.quantity - 1),
                             )
                           }
-                          disabled={item.quantity <= 1}
+                          disabled={item.quantity <= 1 || qtyBusy}
                         >
                           <Minus className="w-3.5 h-3.5" />
                         </Button>
@@ -259,7 +321,10 @@ export function CartPage() {
                               ),
                             )
                           }
-                          disabled={item.quantity >= item.listing.stockQuantity}
+                          disabled={
+                            item.quantity >= item.listing.stockQuantity ||
+                            qtyBusy
+                          }
                         >
                           <Plus className="w-3.5 h-3.5" />
                         </Button>
@@ -280,7 +345,7 @@ export function CartPage() {
                             setItemToRemove(item.id);
                             setRemoveDialogOpen(true);
                           }}
-                          disabled={isRemoving === item.id}
+                          disabled={isRemoving === item.id || qtyBusy}
                         >
                           {isRemoving === item.id ? (
                             <div className="w-4 h-4 border-2 border-red-500 border-t-transparent rounded-full animate-spin" />
@@ -292,7 +357,8 @@ export function CartPage() {
                     </div>
                   </div>
                 </motion.div>
-              ))}
+              );
+              })}
             </AnimatePresence>
 
             {/* Mobile Subtotal */}
@@ -330,7 +396,7 @@ export function CartPage() {
               <Separator />
               <Button
                 className="w-full rounded-xl h-12 text-base font-semibold mt-2"
-                onClick={() => navigate({ view: 'checkout' })}
+                onClick={() => router.push(routes.checkout())}
               >
                 Proceed to Checkout
                 <ArrowRight className="w-4 h-4 ml-2" />
@@ -338,7 +404,7 @@ export function CartPage() {
               <Button
                 variant="ghost"
                 className="w-full rounded-xl text-sm"
-                onClick={() => navigate({ view: 'home' })}
+                onClick={() => router.push(routes.home())}
               >
                 <ArrowLeft className="w-4 h-4 mr-1" />
                 Continue Shopping

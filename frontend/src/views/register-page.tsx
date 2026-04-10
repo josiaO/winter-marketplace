@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod/v4';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -21,7 +21,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUIStore, useAuthStore } from '@/store';
+import { useRouter } from 'next/navigation';
+import { useAuthStore } from '@/store';
+import { routes } from '@/lib/routes';
 import { api } from '@/lib/api-client';
 import { ApiClientError } from '@/lib/api-client';
 
@@ -51,8 +53,14 @@ export function RegisterPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const { navigate } = useUIStore();
-  const { setUser } = useAuthStore();
+  const router = useRouter();
+  const { setUser, isAuthenticated, user: authUser } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
+    }
+  }, [isAuthenticated, router]);
 
   const {
     register,
@@ -85,7 +93,7 @@ export function RegisterPage() {
 
       toast.success('Account created! Please verify your email.');
       // Navigate to OTP verification
-      navigate({ view: 'otp-verify', email: data.email });
+      router.push(routes.registerVerify(data.email));
     } catch (err: unknown) {
       let message = 'Registration failed. Please try again.';
       if (err instanceof ApiClientError) {
@@ -120,7 +128,7 @@ export function RegisterPage() {
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
           <button
-            onClick={() => navigate({ view: 'home' })}
+            onClick={() => router.push(routes.home())}
             className="flex items-center gap-3 group mb-2"
           >
             <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:scale-105 transition-transform">
@@ -283,7 +291,7 @@ export function RegisterPage() {
             <p className="text-sm text-muted-foreground">
               Already have an account?{' '}
               <button
-                onClick={() => navigate({ view: 'login' })}
+                onClick={() => router.push(routes.login())}
                 className="text-emerald-600 hover:text-emerald-700 font-semibold hover:underline"
               >
                 Login

@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -26,15 +28,13 @@ import {
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
 import { EmptyState } from '@/components/smartdalali/empty-state';
-import { useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { getInitials, formatDate } from '@/lib/helpers';
 import { toast } from 'sonner';
 import type { Listing, User } from '@/types/api';
 
-export function SellerProfilePage() {
-  const { currentView, navigate } = useUIStore();
-  const sellerId = currentView.view === 'seller-profile' ? currentView.id : '';
+export function SellerProfilePage({ sellerId }: { sellerId: string }) {
+  const router = useRouter();
 
   const [seller, setSeller] = useState<User | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
@@ -81,8 +81,8 @@ export function SellerProfilePage() {
   }, [sellerId, page]);
 
   const handleProductSelect = useCallback(
-    (listing: Listing) => navigate({ view: 'product', id: String(listing.id) }),
-    [navigate]
+    (listing: Listing) => router.push(routes.product(String(listing.id))),
+    [router]
   );
 
   if (isLoading) {
@@ -110,7 +110,7 @@ export function SellerProfilePage() {
           title="Seller not found"
           description="The seller profile you're looking for doesn't exist."
           actionLabel="Go Home"
-          onAction={() => navigate({ view: 'home' })}
+          onAction={() => router.push(routes.home())}
         />
       </div>
     );
@@ -126,9 +126,7 @@ export function SellerProfilePage() {
   const verificationStatus = seller.seller_profile?.verification_status;
   const isVerifiedSeller = seller.seller_profile?.is_verified || seller.is_verified;
 
-  const storeLink = storeSlug
-    ? { view: 'store' as const, slug: storeSlug }
-    : null;
+  const storeSlugForLink = storeSlug;
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -138,7 +136,7 @@ export function SellerProfilePage() {
           <BreadcrumbItem>
             <BreadcrumbLink
               className="cursor-pointer text-sm flex items-center gap-1"
-              onClick={() => navigate({ view: 'home' })}
+              onClick={() => router.push(routes.home())}
             >
               <Home className="w-3.5 h-3.5" />
               Home
@@ -198,11 +196,11 @@ export function SellerProfilePage() {
                 </div>
 
                 <div className="flex items-center gap-2 sm:ml-auto">
-                  {storeLink && (
+                  {storeSlugForLink && (
                     <Button
                       variant="outline"
                       className="rounded-lg text-sm h-9"
-                      onClick={() => navigate(storeLink)}
+                      onClick={() => router.push(routes.store(storeSlugForLink))}
                     >
                       <Store className="w-4 h-4 mr-1.5" />
                       View Store
@@ -284,7 +282,7 @@ export function SellerProfilePage() {
             title="No products listed"
             description="This seller hasn't listed any products yet."
             actionLabel="Browse Marketplace"
-            onAction={() => navigate({ view: 'home' })}
+            onAction={() => router.push(routes.home())}
           />
         ) : (
           <>

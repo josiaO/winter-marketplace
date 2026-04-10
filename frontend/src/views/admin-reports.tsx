@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -30,7 +32,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatDate, getRelativeTime } from '@/lib/helpers';
 import type { Report, ReportStatus, PaginatedResponse } from '@/types/api';
@@ -98,7 +100,7 @@ function reasonColor(reason: string) {
 // ---------------------------------------------------------------------------
 
 export function AdminReportsPage() {
-  const navigate = useUIStore((s) => s.navigate);
+  const router = useRouter();
   const user = useAuthStore((s) => s.user);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -134,11 +136,11 @@ export function AdminReportsPage() {
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
     fetchReports();
-  }, [isAuthenticated, user, navigate, fetchReports]);
+  }, [isAuthenticated, user, router, fetchReports]);
 
   // ── Dialog helpers ─────────────────────────────────────────────────────
   const openDialog = (report: Report, action: 'resolve' | 'dismiss') => {
@@ -210,7 +212,7 @@ export function AdminReportsPage() {
           <Button
             variant="outline"
             className="gap-2 shrink-0"
-            onClick={() => navigate({ view: 'admin-dashboard' })}
+            onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
             Dashboard

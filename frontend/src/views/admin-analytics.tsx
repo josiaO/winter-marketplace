@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -42,7 +44,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS } from '@/lib/helpers';
 import type { PlatformMetrics } from '@/types/api';
@@ -68,14 +70,14 @@ const CHART_TOOLTIP_STYLE = {
 };
 
 export function AdminAnalyticsPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { user, isAuthenticated } = useAuthStore();
   const [metrics, setMetrics] = useState<PlatformMetrics | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
-      navigate({ view: 'home' });
+      router.push(routes.home());
       return;
     }
 
@@ -90,7 +92,7 @@ export function AdminAnalyticsPage() {
       }
     }
     loadMetrics();
-  }, [isAuthenticated, user, navigate]);
+  }, [isAuthenticated, user, router]);
 
   if (!isAuthenticated || !user || user.role !== 'admin') return null;
 
@@ -187,7 +189,7 @@ export function AdminAnalyticsPage() {
             <Button
               variant="outline"
               className="gap-2 shrink-0"
-              onClick={() => navigate({ view: 'admin-dashboard' })}
+              onClick={() => router.push(routes.adminDashboard())}
             >
               <ArrowUpRight className="w-4 h-4" />
               Dashboard

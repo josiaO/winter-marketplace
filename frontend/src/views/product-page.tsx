@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
@@ -15,7 +17,11 @@ import {
   Store,
   ChevronLeft,
   ChevronRight,
+  AlertTriangle,
+  Flag,
+  XCircle,
 } from 'lucide-react';
+import { AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -31,16 +37,18 @@ import {
 } from '@/components/ui/breadcrumb';
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
-import { useUIStore, useAuthStore, useCartStore } from '@/store';
+import { useAuthStore, useCartStore } from '@/store';
 import { fetchCartForStore } from '@/lib/django-cart-adapter';
 import { api } from '@/lib/api-client';
 import { formatTZS, getInitials, getRelativeTime, formatDate } from '@/lib/helpers';
 import { toast } from 'sonner';
-import type {
-  Listing,
-  ListingAttributeValueRow,
-  Review,
-  PaginatedResponse,
+import {
+  ApiClientError,
+  type Listing,
+  type ListingAttributeValueRow,
+  type Review,
+  type PaginatedResponse,
+  type ReportReason,
 } from '@/types/api';
 
 function collectSpecificationRows(listing: Listing): Array<{ label: string; value: string }> {
@@ -82,12 +90,10 @@ function collectSpecificationRows(listing: Listing): Array<{ label: string; valu
   return rows;
 }
 
-export function ProductPage() {
-  const { currentView, navigate } = useUIStore();
+export function ProductPage({ productId }: { productId: string }) {
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
   const { setCart } = useCartStore();
-
-  const productId = currentView.view === 'product' ? currentView.id : '';
   const [listing, setListing] = useState<Listing | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -98,6 +104,10 @@ export function ProductPage() {
   const [isLoadingReviews, setIsLoadingReviews] = useState(true);
   const [relatedProducts, setRelatedProducts] = useState<Listing[]>([]);
   const [isLoadingRelated, setIsLoadingRelated] = useState(false);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [reportReason, setReportReason] = useState<ReportReason>('spam');
+  const [reportDescription, setReportDescription] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
 
   // Fetch listing detail
   useEffect(() => {
@@ -115,10 +125,10 @@ export function ProductPage() {
       })
       .catch(() => {
         toast.error('Failed to load product');
-        navigate({ view: 'home' });
+        router.push(routes.home());
       })
       .finally(() => setIsLoading(false));
-  }, [productId, navigate]);
+  }, [productId, router]);
 
   // Fetch reviews
   useEffect(() => {
@@ -147,35 +157,83 @@ export function ProductPage() {
   }, [listing?.category?.id, listing?.id]);
 
   const handleAddToCart = useCallback(async () => {
+    if (isAddingToCart) return;
     if (!isAuthenticated) {
       toast.error('Please login to add items to cart');
       return;
     }
+    const stock = listing?.stock_quantity;
+    if (typeof stock === 'number' && stock < 1) {
+      toast.error('This item is out of stock');
+      return;
+    }
     setIsAddingToCart(true);
     try {
-      await api.commerce.cartAddItem({ listing_id: Number(productId) });
+      await api.commerce.cartAddItem({
+        listing_id: Number(productId),
+        quantity: 1,
+      });
       await fetchCartForStore(setCart);
       toast.success('Added to cart!');
-    } catch {
-      toast.error('Failed to add to cart');
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        if (err.status === 400 || err.status === 409) {
+          toast.error(
+            err.detail ||
+              err.message ||
+              'Not enough stock or invalid quantity.',
+          );
+        } else {
+          toast.error(err.detail || err.message || 'Failed to add to cart');
+        }
+      } else {
+        toast.error('Failed to add to cart');
+      }
     } finally {
       setIsAddingToCart(false);
     }
-  }, [isAuthenticated, productId, setCart]);
+  }, [isAddingToCart, isAuthenticated, productId, listing?.stock_quantity, setCart]);
 
   const handleBuyNow = useCallback(async () => {
+    if (isAddingToCart) return;
     if (!isAuthenticated) {
       toast.error('Please login to purchase');
       return;
     }
-    try {
-      await api.commerce.cartAddItem({ listing_id: Number(productId) });
-      await fetchCartForStore(setCart);
-      navigate({ view: 'cart' });
-    } catch {
-      toast.error('Failed to proceed. Please try adding to cart first.');
+    const stock = listing?.stock_quantity;
+    if (typeof stock === 'number' && stock < 1) {
+      toast.error('This item is out of stock');
+      return;
     }
-  }, [isAuthenticated, productId, navigate, setCart]);
+    setIsAddingToCart(true);
+    try {
+      await api.commerce.cartAddItem({
+        listing_id: Number(productId),
+        quantity: 1,
+      });
+      await fetchCartForStore(setCart);
+      router.push(routes.cart());
+    } catch (err: unknown) {
+      if (err instanceof ApiClientError) {
+        toast.error(
+          err.detail ||
+            err.message ||
+            'Could not add to cart. Check stock and try again.',
+        );
+      } else {
+        toast.error('Failed to proceed. Please try adding to cart first.');
+      }
+    } finally {
+      setIsAddingToCart(false);
+    }
+  }, [
+    isAddingToCart,
+    isAuthenticated,
+    productId,
+    listing?.stock_quantity,
+    router,
+    setCart,
+  ]);
 
   const handleToggleLike = useCallback(async () => {
     if (!isAuthenticated) {
@@ -198,9 +256,36 @@ export function ProductPage() {
     }
   }, [isAuthenticated, productId]);
 
+  const handleReportListing = useCallback(async () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to report this listing');
+      return;
+    }
+    if (!reportDescription.trim()) {
+      toast.error('Please provide a description for the report');
+      return;
+    }
+    setIsReporting(true);
+    try {
+      await api.trust.createReport({
+        listing: Number(productId),
+        reason: reportReason,
+        description: reportDescription.trim(),
+      });
+      toast.success('Listing reported. Our moderators will review it.');
+      setShowReportDialog(false);
+      setReportDescription('');
+    } catch (err: unknown) {
+      const msg = err instanceof ApiClientError ? err.detail || err.message : 'Failed to submit report';
+      toast.error(msg);
+    } finally {
+      setIsReporting(false);
+    }
+  }, [isAuthenticated, productId, reportReason, reportDescription]);
+
   const handleProductSelect = useCallback(
-    (l: Listing) => navigate({ view: 'product', id: String(l.id) }),
-    [navigate]
+    (l: Listing) => router.push(routes.product(String(l.id))),
+    [router]
   );
 
   // Loading skeleton
@@ -257,7 +342,7 @@ export function ProductPage() {
           <BreadcrumbItem>
             <BreadcrumbLink
               className="cursor-pointer text-sm"
-              onClick={() => navigate({ view: 'home' })}
+              onClick={() => router.push(routes.home())}
             >
               <Home className="w-4 h-4" />
             </BreadcrumbLink>
@@ -266,7 +351,7 @@ export function ProductPage() {
           <BreadcrumbItem>
             <BreadcrumbLink
               className="cursor-pointer text-sm"
-              onClick={() => navigate({ view: 'category', slug: listing.category.slug })}
+              onClick={() => router.push(routes.category(listing.category.slug))}
             >
               {listing.category.name}
             </BreadcrumbLink>
@@ -290,20 +375,31 @@ export function ProductPage() {
         >
           {/* Main Image */}
           <div className="relative aspect-square rounded-2xl overflow-hidden bg-muted border">
-            {primaryImage?.image ? (
-              <Image
-                src={primaryImage.image}
-                alt={listing.title}
-                fill
-                className="object-cover"
-                sizes="(max-width: 1024px) 100vw, 50vw"
-                priority
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <Package className="w-16 h-16 text-muted-foreground/30" />
-              </div>
-            )}
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedImage}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.2 }}
+                className="absolute inset-0"
+              >
+                {primaryImage?.image ? (
+                  <Image
+                    src={primaryImage.image}
+                    alt={listing.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 1024px) 100vw, 50vw"
+                    priority
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Package className="w-16 h-16 text-muted-foreground/30" />
+                  </div>
+                )}
+              </motion.div>
+            </AnimatePresence>
 
             {/* Navigation arrows */}
             {images.length > 1 && (
@@ -457,7 +553,7 @@ export function ProductPage() {
                   variant="outline"
                   size="sm"
                   className="text-xs h-8 rounded-lg"
-                  onClick={() => navigate({ view: 'store', slug: storeSlug })}
+                  onClick={() => router.push(routes.store(storeSlug))}
                 >
                   <Store className="w-3.5 h-3.5 mr-1" />
                   Store
@@ -469,7 +565,7 @@ export function ProductPage() {
                 className="text-xs h-8 rounded-lg"
                 onClick={() => {
                   const sellerId = sellerUser?.id;
-                  if (sellerId) navigate({ view: 'seller-profile', id: String(sellerId) });
+                  if (sellerId) router.push(routes.sellerProfile(String(sellerId)));
                 }}
                 disabled={!sellerUser?.id}
               >
@@ -485,7 +581,11 @@ export function ProductPage() {
               size="lg"
               className="flex-1 rounded-xl h-12 text-base font-semibold"
               onClick={handleAddToCart}
-              disabled={isAddingToCart}
+              disabled={
+                isAddingToCart ||
+                (typeof listing.stock_quantity === 'number' &&
+                  listing.stock_quantity < 1)
+              }
             >
               {isAddingToCart ? (
                 <div className="w-5 h-5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />
@@ -513,9 +613,26 @@ export function ProductPage() {
               size="lg"
               className="flex-1 rounded-xl h-12 text-base font-semibold bg-emerald-600 hover:bg-emerald-700"
               onClick={handleBuyNow}
+              disabled={
+                isAddingToCart ||
+                (typeof listing.stock_quantity === 'number' &&
+                  listing.stock_quantity < 1)
+              }
             >
               <Zap className="w-5 h-5 mr-2" />
               Buy Now
+            </Button>
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-xs text-muted-foreground hover:text-red-600 gap-1.5 h-8 px-2"
+              onClick={() => setShowReportDialog(true)}
+            >
+              <Flag className="w-3.5 h-3.5" />
+              Report listing
             </Button>
           </div>
 
@@ -709,6 +826,78 @@ export function ProductPage() {
           )}
         </section>
       )}
+      {/* Report Dialog (Simple Modal Implementation) */}
+      <AnimatePresence>
+        {showReportDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-background border rounded-2xl shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-6 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-red-600">
+                    <AlertTriangle className="w-5 h-5" />
+                    <h3 className="text-lg font-bold">Report Listing</h3>
+                  </div>
+                  <Button variant="ghost" size="icon" onClick={() => setShowReportDialog(false)} className="h-8 w-8">
+                    <XCircle className="w-5 h-5" />
+                  </Button>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Reason for reporting</label>
+                    <select
+                      className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+                      value={reportReason}
+                      onChange={(e) => setReportReason(e.target.value as ReportReason)}
+                    >
+                      <option value="spam">Spam or misleading</option>
+                      <option value="fraud">Fraud or scam</option>
+                      <option value="inappropriate">Inappropriate content</option>
+                      <option value="duplicate">Duplicate listing</option>
+                      <option value="wrong_category">Wrong category</option>
+                      <option value="other">Other issue</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-sm font-medium">Description</label>
+                    <textarea
+                      className="w-full min-h-[100px] rounded-md border bg-background p-3 text-sm resize-none"
+                      placeholder="Please provide details about what is wrong with this listing..."
+                      value={reportDescription}
+                      onChange={(e) => setReportDescription(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                <div className="flex gap-3 pt-2">
+                  <Button
+                    variant="outline"
+                    className="flex-1"
+                    onClick={() => setShowReportDialog(false)}
+                    disabled={isReporting}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    className="flex-1 bg-red-600 hover:bg-red-700"
+                    onClick={handleReportListing}
+                    disabled={isReporting}
+                  >
+                    {isReporting ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Flag className="w-4 h-4 mr-2" />}
+                    Submit Report
+                  </Button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

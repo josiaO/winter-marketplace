@@ -1,6 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
+import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { motion } from 'framer-motion';
 import {
@@ -17,9 +19,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardFooter, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useUIStore } from '@/store';
+
 import { api } from '@/lib/api-client';
 import { ApiClientError } from '@/lib/api-client';
+import { useAuthStore } from '@/store';
 
 interface ForgotPasswordFormValues {
   email: string;
@@ -30,7 +33,14 @@ export function ForgotPasswordPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [submittedEmail, setSubmittedEmail] = useState('');
-  const { navigate } = useUIStore();
+  const router = useRouter();
+  const { isAuthenticated } = useAuthStore();
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      router.replace('/');
+    }
+  }, [isAuthenticated, router]);
 
   const {
     register,
@@ -71,7 +81,7 @@ export function ForgotPasswordPage() {
         {/* Brand Logo */}
         <div className="flex flex-col items-center mb-8">
           <button
-            onClick={() => navigate({ view: 'home' })}
+            onClick={() => router.push(routes.home())}
             className="flex items-center gap-3 group mb-2"
           >
             <div className="w-12 h-12 bg-emerald-600 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-600/20 group-hover:scale-105 transition-transform">
@@ -117,7 +127,7 @@ export function ForgotPasswordPage() {
               </CardContent>
               <CardFooter className="flex-col gap-4 pb-6 px-6">
                 <Button
-                  onClick={() => navigate({ view: 'login' })}
+                  onClick={() => router.push(routes.login())}
                   className="w-full h-11 text-sm font-semibold bg-emerald-600 hover:bg-emerald-700"
                 >
                   Back to Login
@@ -207,7 +217,7 @@ export function ForgotPasswordPage() {
               </CardContent>
               <CardFooter className="flex-col gap-3 pb-6 px-6">
                 <button
-                  onClick={() => navigate({ view: 'login' })}
+                  onClick={() => router.push(routes.login())}
                   className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />

@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
@@ -20,20 +22,23 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS } from '@/lib/helpers';
 import { toast } from 'sonner';
-import type {
-  Cart as DjangoCart,
-  CheckoutPayload,
-  Listing,
-  ShippingMethod,
-  PaymentMethod,
-  PaymentChannel,
-  Order,
-  ShippingOptionRow,
+import {
+  ApiClientError,
+  type Cart as DjangoCart,
+  type CheckoutPayload,
+  type Listing,
+  type ShippingMethod,
+  type PaymentMethod,
+  type PaymentChannel,
+  type Order,
+  type ShippingOptionRow,
 } from '@/types/api';
+
+const PENDING_TXN_REF_KEY = 'sd_pending_txn_ref';
 
 /** Sum seller-defined delivery fees on cart lines (matches checkout OrderService). */
 function listingDeliveryFromCart(cart: DjangoCart | null): number {
@@ -128,7 +133,7 @@ interface FormErrors {
 }
 
 export function CheckoutPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
 
   const [cartData, setCartData] = useState<DjangoCart | null>(null);
@@ -148,9 +153,9 @@ export function CheckoutPage() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, router]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -220,7 +225,10 @@ export function CheckoutPage() {
         payment_method: method,
         ...(channel ? { payment_channel: channel } : {}),
         ...(origin
-          ? { redirect_url: `${origin}/`, cancel_url: `${origin}/` }
+          ? {
+              redirect_url: `${origin}/checkout/payment-return`,
+              cancel_url: `${origin}/checkout/payment-return`,
+            }
           : {}),
       };
 
@@ -235,7 +243,7 @@ export function CheckoutPage() {
         if (primary.transaction_reference && typeof sessionStorage !== 'undefined') {
           try {
             sessionStorage.setItem(
-              'sd_pending_txn_ref',
+              PENDING_TXN_REF_KEY,
               primary.transaction_reference,
             );
           } catch {
@@ -246,16 +254,70 @@ export function CheckoutPage() {
         return;
       }
 
+      /** Some gateways return the order first and require a separate initiate-payment call. */
+      const needsHostedPayment = method !== 'cash_on_delivery';
+      if (needsHostedPayment && primary.id != null) {
+        try {
+          const payRes = await api.commerce.initiatePayment(primary.id, {
+            payment_method: method,
+            ...(channel ? { payment_channel: channel } : {}),
+            ...(origin
+              ? {
+                  redirect_url: `${origin}/checkout/payment-return`,
+                  cancel_url: `${origin}/checkout/payment-return`,
+                }
+              : {}),
+          });
+          if (payRes.payment_url) {
+            if (
+              payRes.transaction_reference &&
+              typeof sessionStorage !== 'undefined'
+            ) {
+              try {
+                sessionStorage.setItem(
+                  PENDING_TXN_REF_KEY,
+                  payRes.transaction_reference,
+                );
+              } catch {
+                /* ignore */
+              }
+            }
+            window.location.assign(payRes.payment_url);
+            return;
+          }
+          toast.error(
+            payRes.error ||
+              'Could not open the payment page. You can pay from order details.',
+          );
+          router.push(routes.checkoutConfirm(String(primary.id)));
+          return;
+        } catch (payErr: unknown) {
+          const payMsg =
+            payErr instanceof ApiClientError
+              ? payErr.detail || payErr.message
+              : payErr instanceof Error
+                ? payErr.message
+                : 'Could not start payment.';
+          toast.error(payMsg);
+          router.push(routes.checkoutConfirm(String(primary.id)));
+          return;
+        }
+      }
+
       if (orders.length > 1) {
         toast.success(`Orders placed successfully! (${orders.length} orders)`);
-        navigate({ view: 'orders' });
+        router.push(routes.orders());
       } else {
         toast.success('Order placed successfully!');
-        navigate({ view: 'checkout-success', orderId: String(primary.id) });
+        router.push(routes.checkoutSuccess(String(primary.id)));
       }
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : 'Failed to place order';
+      let message = 'Failed to place order';
+      if (err instanceof ApiClientError) {
+        message = err.detail || err.message || message;
+      } else if (err instanceof Error) {
+        message = err.message;
+      }
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -283,7 +345,7 @@ export function CheckoutPage() {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center">
         <p className="text-muted-foreground mb-4">Could not load your cart.</p>
-        <Button onClick={() => navigate({ view: 'cart' })}>Back to cart</Button>
+        <Button onClick={() => router.push(routes.cart())}>Back to cart</Button>
       </div>
     );
   }

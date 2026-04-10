@@ -1,5 +1,7 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
+import { routes } from '@/lib/routes';
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod/v4';
@@ -21,7 +23,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
-import { useUIStore, useAuthStore } from '@/store';
+import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { ApiClientError } from '@/lib/api-client';
 
@@ -46,7 +48,7 @@ const changePasswordSchema = z
 type ChangePasswordFormValues = z.infer<typeof changePasswordSchema>;
 
 export function ChangePasswordPage() {
-  const { navigate } = useUIStore();
+  const router = useRouter();
   const { isAuthenticated } = useAuthStore();
 
   const [showOld, setShowOld] = useState(false);
@@ -58,9 +60,9 @@ export function ChangePasswordPage() {
   // Redirect to login if not authenticated
   useEffect(() => {
     if (!isAuthenticated) {
-      navigate({ view: 'login' });
+      router.push(routes.login());
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, router]);
 
   const {
     register,
@@ -87,7 +89,7 @@ export function ChangePasswordPage() {
       });
       toast.success('Password changed successfully!');
       reset();
-      navigate({ view: 'profile' });
+      router.push(routes.profile());
     } catch (err: unknown) {
       let message = 'Failed to change password. Please try again.';
       if (err instanceof ApiClientError) {
@@ -140,7 +142,7 @@ export function ChangePasswordPage() {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-foreground">Security Settings</span>
               <button
-                onClick={() => navigate({ view: 'profile' })}
+                onClick={() => router.push(routes.profile())}
                 className="text-sm text-muted-foreground hover:text-foreground inline-flex items-center gap-1.5 transition-colors"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
