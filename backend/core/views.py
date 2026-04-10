@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from .models import SiteConfiguration
 from .serializers.settings import SiteConfigurationSerializer
+from .drf_utils import viewset_mapped_action
 
 class SiteConfigurationViewSet(viewsets.ModelViewSet):
     """
@@ -15,12 +16,12 @@ class SiteConfigurationViewSet(viewsets.ModelViewSet):
 
     def get_authenticators(self):
         # Public read must not run JWT/Firebase auth: a stale Bearer token would
-        # return 403 (token_not_valid) before AllowAny is applied, breaking dashboards.
-        # self.request can be unset during drf-spectacular schema introspection (mock request).
+        # fail before AllowAny is applied. Use viewset_mapped_action (not self.action:
+        # it is unset while get_authenticators runs during request initialization).
         request = getattr(self, "request", None)
         if (
             request is not None
-            and getattr(self, "action", None) == "current"
+            and viewset_mapped_action(self) == "current"
             and request.method.upper() == "GET"
         ):
             return []

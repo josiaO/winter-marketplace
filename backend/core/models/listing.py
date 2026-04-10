@@ -8,15 +8,12 @@ from ..constants import ListingStatus
 from django.utils.translation import gettext_lazy as _
 from django.contrib.postgres.indexes import GinIndex
 from .base import BaseModel
-import django.db.models.query_utils as query_utils
 from django.db.models import Q
-from django.db.models import query_utils
 
 class BaseListing(BaseModel):
     """
     Abstract base model for all marketplace listings.
     
-    Universal model that represents:
     Universal model that represents:
     - Products (phones, electronics, vehicles)
     - Services (cleaning, consulting, etc.)

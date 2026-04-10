@@ -20,6 +20,7 @@ from .filters import ListingFilter
 from . import services as listing_svc
 from .validators import validate_media_file
 from accounts.permissions import IsAgent, IsSeller, IsAdmin
+from core.drf_utils import viewset_mapped_action
 from .services.search_service import unified_listing_search
 from .services.management_service import toggle_listing_verification, toggle_listing_featured
 
@@ -57,6 +58,11 @@ class ListingViewSet(viewsets.ModelViewSet):
         if self.action in ['list', 'retrieve']:
             return [ListingAnonRateThrottle(), ListingUserRateThrottle()]
         return super().get_throttles()  # Apply default rate limiting for create/update/delete
+
+    def get_authenticators(self):
+        if viewset_mapped_action(self) in ('list', 'retrieve'):
+            return []
+        return super().get_authenticators()
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -278,6 +284,7 @@ class ListingViewSet(viewsets.ModelViewSet):
 
 class UnifiedListingView(APIView):
     permission_classes = [permissions.AllowAny]
+    authentication_classes = []
 
     @extend_schema(
         parameters=[

@@ -190,6 +190,8 @@ export interface Listing {
   is_verified: boolean;
   is_featured: boolean;
   view_count: number;
+  /** Available on listing detail / cart payloads from Django. */
+  stock_quantity?: number;
   status: ListingStatus;
   listing_type: ListingType;
   seller?: ListingSeller;
@@ -315,14 +317,21 @@ export type ShippingMethod = 'standard' | 'express' | 'pickup';
 export type PaymentMethod = 'mobile_money' | 'bank_transfer' | 'card' | 'cash_on_delivery';
 export type PaymentChannel = 'tigo_pesa' | 'm_pesa' | 'airtel_money' | 'halopesa' | 'azam_pay' | 'bank';
 
+/** Matches Django `OrderItemSerializer`; legacy flat fields optional. */
 export interface OrderItem {
   id: number;
-  listing: Listing;
-  listing_title: string;
-  listing_price: number;
-  listing_image: string | null;
+  order?: number;
+  listing?: Listing | null;
+  listing_id?: number;
   quantity: number;
-  total: number;
+  price_at_time?: string | number;
+  subtotal?: string | number;
+  created_at?: string;
+  updated_at?: string;
+  listing_title?: string;
+  listing_price?: number;
+  listing_image?: string | null;
+  total?: number;
 }
 
 export interface OrderBuyer {
@@ -357,8 +366,8 @@ export interface Order {
   buyer: OrderBuyer;
   seller: OrderSeller;
   items: OrderItem[];
-  subtotal: number;
-  shipping_cost?: number;
+  subtotal?: number | string;
+  shipping_cost?: number | string;
   total?: number;
   total_amount?: string | number;
   totalAmount?: string | number;

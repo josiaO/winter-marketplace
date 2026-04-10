@@ -1,5 +1,6 @@
 version: '3.8'
 services:
+  # Admin UI: http://localhost:8000/admin/ (not under /api/v1; open this URL directly).
   backend:
     build:
       context: ./backend
@@ -61,4 +62,7 @@ services:
     volumes:
       - ./frontend:/app
     environment:
-      - VITE_API_URL=http://localhost:8000/api/v1
+      # Next.js route handler proxies /api/v1 → Django (server-side).
+      - INTERNAL_API_URL=http://backend:8000
+      # Browser-absolute URLs (e.g. media); host reaches Django on published port.
+      - NEXT_PUBLIC_API_URL=http://localhost:8000

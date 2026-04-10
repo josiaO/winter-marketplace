@@ -90,6 +90,7 @@ class DashboardView(APIView):
 class TrackEventView(APIView):
     """Frontend endpoint for tracking user events."""
     permission_classes = [AllowAny]
+    authentication_classes = []
     
     @extend_schema(
         request=inline_serializer("TrackEventRequest", fields={

@@ -1,10 +1,82 @@
 import { OrderStatus, type Listing, type ListingImage } from '@/types';
 
 /**
- * Format an amount in Tanzanian Shillings
+ * Format an amount in Tanzanian Shillings.
+ * Coerces strings/decimals; safe when API omits a field (shows TZS —).
  */
-export function formatTZS(amount: number): string {
-  return `TZS ${amount.toLocaleString('en-TZ')}`;
+export function formatTZS(amount: number | string | null | undefined): string {
+  if (amount === null || amount === undefined || amount === '') {
+    return 'TZS —';
+  }
+  const n =
+    typeof amount === 'string'
+      ? parseFloat(String(amount).replace(/,/g, ''))
+      : Number(amount);
+  if (!Number.isFinite(n)) {
+    return 'TZS —';
+  }
+  return `TZS ${n.toLocaleString('en-TZ')}`;
+}
+
+/** Shape of order line items from Django OrderItemSerializer (+ optional legacy flat fields). */
+export type CommerceOrderItemLike = {
+  listing_title?: string;
+  listing_price?: number;
+  listing_image?: string | null;
+  total?: number;
+  quantity?: number;
+  price_at_time?: string | number;
+  subtotal?: string | number;
+  listing?: {
+    title?: string;
+    price?: number | string;
+    images?: Array<{ image?: string; is_primary?: boolean }>;
+    image?: string;
+  } | null;
+};
+
+export function commerceOrderItemTitle(item: CommerceOrderItemLike): string {
+  return item.listing_title || item.listing?.title || 'Item';
+}
+
+export function commerceOrderItemImage(
+  item: CommerceOrderItemLike,
+): string | null | undefined {
+  if (item.listing_image) return item.listing_image;
+  const imgs = item.listing?.images;
+  if (imgs?.length) {
+    const primary = imgs.find((i) => i.is_primary) || imgs[0];
+    if (primary?.image) return primary.image;
+  }
+  return item.listing?.image;
+}
+
+export function commerceOrderItemUnitPrice(item: CommerceOrderItemLike): number {
+  if (item.listing_price != null && Number.isFinite(Number(item.listing_price))) {
+    return Number(item.listing_price);
+  }
+  const pat = item.price_at_time;
+  if (pat != null) {
+    const n = typeof pat === 'string' ? parseFloat(pat) : Number(pat);
+    if (Number.isFinite(n)) return n;
+  }
+  const p = item.listing?.price;
+  if (p != null) {
+    const n = typeof p === 'string' ? parseFloat(String(p)) : Number(p);
+    if (Number.isFinite(n)) return n;
+  }
+  return 0;
+}
+
+/** Line total: prefer `subtotal` / `total` from API, else unit × quantity. */
+export function commerceOrderItemLineTotal(item: CommerceOrderItemLike): number {
+  const raw = item.total ?? item.subtotal;
+  if (raw != null && raw !== '') {
+    const n = typeof raw === 'string' ? parseFloat(raw) : Number(raw);
+    if (Number.isFinite(n)) return n;
+  }
+  const q = item.quantity ?? 1;
+  return commerceOrderItemUnitPrice(item) * q;
 }
 
 /**

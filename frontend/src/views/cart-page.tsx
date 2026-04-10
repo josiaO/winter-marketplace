@@ -28,46 +28,9 @@ import { EmptyState } from '@/components/smartdalali/empty-state';
 import { PriceDisplay } from '@/components/smartdalali/price-display';
 import { useUIStore, useAuthStore, useCartStore } from '@/store';
 import { api } from '@/lib/api-client';
+import { adaptDjangoCart } from '@/lib/django-cart-adapter';
 import { formatTZS } from '@/lib/helpers';
 import { toast } from 'sonner';
-import type { Cart as DjangoCart } from '@/types/api';
-import type { Cart } from '@/types';
-
-// ---------------------------------------------------------------------------
-// Adapter: Django Cart → local Cart (keeps cart store & checkout-page working)
-// ---------------------------------------------------------------------------
-
-function lineSubtotalFromItem(item: DjangoCart['items'][0]): number {
-  if (item.subtotal != null) return Number(item.subtotal);
-  return Number(item.listing.price) * item.quantity;
-}
-
-function adaptDjangoCart(djangoCart: DjangoCart): Cart {
-  return {
-    id: String(djangoCart.id),
-    userId: String(djangoCart.user),
-    items: djangoCart.items.map((item) => ({
-      id: String(item.id),
-      cartId: String(djangoCart.id),
-      listingId: String(item.listing_id),
-      listing: {
-        id: String(item.listing.id),
-        title: item.listing.title,
-        price: item.listing.price,
-        stockQuantity: 99,
-        images: item.listing.images.map((img) => ({
-          id: String(img.id),
-          url: img.image,
-          altText: null,
-          sortOrder: img.order,
-          isPrimary: img.is_primary,
-        })),
-      },
-      quantity: item.quantity,
-      lineSubtotal: lineSubtotalFromItem(item),
-    })),
-  };
-}
 
 // ---------------------------------------------------------------------------
 
@@ -131,7 +94,7 @@ export function CartPage() {
     if (!isAuthenticated || !itemToRemove) return;
     setIsRemoving(itemToRemove);
     try {
-      await api.commerce.cartRemoveItem(itemToRemove);
+      await api.commerce.cartRemoveItem({ item_id: itemToRemove });
       await fetchAndSetCart();
       toast.success('Item removed from cart');
     } catch {

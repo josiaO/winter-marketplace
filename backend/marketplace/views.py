@@ -21,6 +21,7 @@ from listings.serializers import ListingSerializer
 from accounts.permissions import IsAgent, IsSeller
 from trust.models import Review
 from trust.serializers import ReviewSerializer
+from core.drf_utils import viewset_mapped_action
 
 
 def _public_seller_visibility_q() -> Q:
@@ -109,6 +110,11 @@ class MarketplaceItemViewSet(viewsets.ModelViewSet):
         
         return queryset
 
+    def get_authenticators(self):
+        if viewset_mapped_action(self) in ('list', 'retrieve'):
+            return []
+        return super().get_authenticators()
+
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
             return [permissions.AllowAny()]
@@ -128,6 +134,11 @@ class SellerProfileViewSet(viewsets.ModelViewSet):
     search_fields = ['business_name', 'user__username', 'user__email']
     ordering_fields = ['created_at', 'average_rating', 'is_verified']
     filterset_fields = ['is_verified', 'is_active', 'business_type']
+
+    def get_authenticators(self):
+        if viewset_mapped_action(self) in ('list', 'retrieve', 'reviews'):
+            return []
+        return super().get_authenticators()
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:
@@ -281,6 +292,11 @@ class StoreViewSet(viewsets.ModelViewSet):
                 )
             )
         return qs.annotate(is_followed=Value(False, output_field=BooleanField()))
+
+    def get_authenticators(self):
+        if viewset_mapped_action(self) in ('list', 'retrieve'):
+            return []
+        return super().get_authenticators()
 
     def get_permissions(self):
         if self.action in ['list', 'retrieve']:

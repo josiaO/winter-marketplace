@@ -5,12 +5,18 @@ from rest_framework import status
 from django.utils import timezone
 from .models import Plan, Feature, SubscriptionPlan, Subscription
 from .serializers import PlanSerializer, FeatureSerializer, SubscriptionPlanSerializer, SubscriptionSerializer
+from core.drf_utils import viewset_mapped_action
 
 class FeatureViewSet(viewsets.ModelViewSet):
     """Full CRUD for features"""
     queryset = Feature.objects.all()
     serializer_class = FeatureSerializer
     permission_classes = [permissions.AllowAny]  # Public read, admin write
+
+    def get_authenticators(self):
+        if viewset_mapped_action(self) in ('list', 'retrieve'):
+            return []
+        return super().get_authenticators()
     
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:
@@ -22,6 +28,11 @@ class PlanViewSet(viewsets.ModelViewSet):
     queryset = Plan.objects.all()
     serializer_class = PlanSerializer
     permission_classes = [permissions.AllowAny]
+
+    def get_authenticators(self):
+        if viewset_mapped_action(self) in ('list', 'retrieve'):
+            return []
+        return super().get_authenticators()
     
     def get_permissions(self):
         if self.action in ['create', 'update', 'partial_update', 'destroy']:

@@ -31,7 +31,8 @@ import {
 } from '@/components/ui/breadcrumb';
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
-import { useUIStore, useAuthStore } from '@/store';
+import { useUIStore, useAuthStore, useCartStore } from '@/store';
+import { fetchCartForStore } from '@/lib/django-cart-adapter';
 import { api } from '@/lib/api-client';
 import { formatTZS, getInitials, getRelativeTime, formatDate } from '@/lib/helpers';
 import { toast } from 'sonner';
@@ -84,6 +85,7 @@ function collectSpecificationRows(listing: Listing): Array<{ label: string; valu
 export function ProductPage() {
   const { currentView, navigate } = useUIStore();
   const { isAuthenticated } = useAuthStore();
+  const { setCart } = useCartStore();
 
   const productId = currentView.view === 'product' ? currentView.id : '';
   const [listing, setListing] = useState<Listing | null>(null);
@@ -152,13 +154,14 @@ export function ProductPage() {
     setIsAddingToCart(true);
     try {
       await api.commerce.cartAddItem({ listing_id: Number(productId) });
+      await fetchCartForStore(setCart);
       toast.success('Added to cart!');
     } catch {
       toast.error('Failed to add to cart');
     } finally {
       setIsAddingToCart(false);
     }
-  }, [isAuthenticated, productId]);
+  }, [isAuthenticated, productId, setCart]);
 
   const handleBuyNow = useCallback(async () => {
     if (!isAuthenticated) {
@@ -167,11 +170,12 @@ export function ProductPage() {
     }
     try {
       await api.commerce.cartAddItem({ listing_id: Number(productId) });
+      await fetchCartForStore(setCart);
       navigate({ view: 'cart' });
     } catch {
       toast.error('Failed to proceed. Please try adding to cart first.');
     }
-  }, [isAuthenticated, productId, navigate]);
+  }, [isAuthenticated, productId, navigate, setCart]);
 
   const handleToggleLike = useCallback(async () => {
     if (!isAuthenticated) {

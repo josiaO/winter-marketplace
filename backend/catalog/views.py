@@ -5,6 +5,7 @@ from rest_framework.exceptions import NotFound
 from django.core.cache import cache
 from django.conf import settings
 from core.permissions import IsAdmin, IsAdminOrReadOnly
+from core.drf_utils import viewset_mapped_action
 from .models import Category, CategoryField, Attribute
 from .serializers import (
     CategorySerializer, CategoryListSerializer, 
@@ -17,6 +18,12 @@ class CategoryViewSet(viewsets.ModelViewSet):
     """ViewSet for Category with nested fields endpoint and aggressive caching for scale."""
     serializer_class = CategorySerializer
     lookup_field = 'slug'
+
+    def get_authenticators(self):
+        # Invalid Bearer must not run before AllowAny (see core.drf_utils.viewset_mapped_action).
+        if viewset_mapped_action(self) in ('list', 'retrieve', 'fields', 'attributes', 'subcategories'):
+            return []
+        return super().get_authenticators()
     
     def get_queryset(self):
         """Return queryset - include inactive for admins, only active for others."""
@@ -194,6 +201,11 @@ class CategoryFieldViewSet(viewsets.ModelViewSet):
     serializer_class = CategoryFieldSerializer
     permission_classes = [IsAdminOrReadOnly]
     pagination_class = None
+
+    def get_authenticators(self):
+        if viewset_mapped_action(self) in ('list', 'retrieve'):
+            return []
+        return super().get_authenticators()
     
     def get_queryset(self):
         queryset = CategoryField.objects.all().select_related('category')

@@ -45,6 +45,10 @@ import {
   getStatusLabel,
   orderNumberLabel,
   orderTotalAmount,
+  commerceOrderItemTitle,
+  commerceOrderItemImage,
+  commerceOrderItemUnitPrice,
+  commerceOrderItemLineTotal,
 } from '@/lib/helpers';
 import { ApiClientError } from '@/types/api';
 import type { Order, PaginatedResponse } from '@/types/api';
@@ -329,16 +333,18 @@ export function SellerOrdersPage() {
                                         Items
                                       </h4>
                                       <div className="space-y-2">
-                                        {order.items.map((item) => (
+                                        {order.items.map((item) => {
+                                          const img = commerceOrderItemImage(item);
+                                          return (
                                           <div
                                             key={item.id}
                                             className="flex items-center gap-3 bg-background rounded-lg p-2.5"
                                           >
                                             <div className="w-12 h-12 rounded-lg bg-muted overflow-hidden shrink-0">
-                                              {item.listing_image ? (
+                                              {img ? (
                                                 <img
-                                                  src={item.listing_image}
-                                                  alt={item.listing_title}
+                                                  src={img}
+                                                  alt={commerceOrderItemTitle(item)}
                                                   className="w-full h-full object-cover"
                                                 />
                                               ) : (
@@ -349,17 +355,18 @@ export function SellerOrdersPage() {
                                             </div>
                                             <div className="flex-1 min-w-0">
                                               <p className="text-sm font-medium text-foreground truncate">
-                                                {item.listing_title}
+                                                {commerceOrderItemTitle(item)}
                                               </p>
                                               <p className="text-xs text-muted-foreground">
-                                                {formatTZS(item.listing_price)} x {item.quantity}
+                                                {formatTZS(commerceOrderItemUnitPrice(item))} x {item.quantity}
                                               </p>
                                             </div>
                                             <span className="text-sm font-semibold text-foreground shrink-0">
-                                              {formatTZS(item.total)}
+                                              {formatTZS(commerceOrderItemLineTotal(item))}
                                             </span>
                                           </div>
-                                        ))}
+                                        );
+                                        })}
                                       </div>
                                     </div>
 

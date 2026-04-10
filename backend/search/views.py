@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 class MarketplaceSearchView(APIView):
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     @extend_schema(
         parameters=[

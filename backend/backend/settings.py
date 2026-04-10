@@ -371,6 +371,7 @@ else:
     CSRF_TRUSTED_ORIGINS = [
         'http://localhost:3000', 'http://127.0.0.1:3000',  # Frontend
         'http://localhost:3001', 'http://127.0.0.1:3001',  # Dashboards
+        'http://localhost:8000', 'http://127.0.0.1:8000',  # Admin / API same origin
     ]
 
 # CORS allowed origins - MUST be set in production
@@ -752,7 +753,13 @@ PARLER_DEFAULT_LANGUAGE_CODE = 'en'
 # Static files (CSS, JavaScript, Images)
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / "static_root"
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# In DEBUG, skip manifest storage + serve from app finders so admin/static work without
+# collectstatic (docker-compose often runs runserver only and never runs build.sh).
+if DEBUG:
+    STATICFILES_STORAGE = 'django.contrib.staticfiles.storage.StaticFilesStorage'
+    WHITENOISE_USE_FINDERS = True
+else:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files (User uploads) - Cloudinary Configuration with Local Fallback
 CLOUDINARY_CLOUD_NAME = os.getenv('CLOUDINARY_CLOUD_NAME')
@@ -902,8 +909,8 @@ TRUST_REPORT_MAX_DESCRIPTION_LEN = int(os.getenv('TRUST_REPORT_MAX_DESCRIPTION_L
 AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', '5'))
 AXES_COOLOFF_TIME = int(os.getenv('AXES_COOLOFF_TIME', '1')) # 1 hour
 AXES_LOCKOUT_TEMPLATE = None # Can set custom template later
-# Tell django-axes that we use reverse proxy
-AXES_IPWARE_PROXY_COUNT = 1
+# Trust X-Forwarded-For only when behind a real proxy (e.g. Render). Local runserver: use 0.
+AXES_IPWARE_PROXY_COUNT = int(os.getenv('AXES_IPWARE_PROXY_COUNT', '0' if DEBUG else '1'))
 AXES_IPWARE_META_PRECEDENCE_ORDER = [
    'HTTP_X_FORWARDED_FOR',
    'REMOTE_ADDR',

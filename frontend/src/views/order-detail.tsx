@@ -49,6 +49,10 @@ import {
   getStatusLabel,
   orderTotalAmount,
   orderNumberLabel,
+  commerceOrderItemTitle,
+  commerceOrderItemImage,
+  commerceOrderItemUnitPrice,
+  commerceOrderItemLineTotal,
 } from '@/lib/helpers';
 import { toast } from 'sonner';
 import type { Order, OrderStatus } from '@/types/api';
@@ -338,17 +342,19 @@ export function OrderDetailPage() {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {order.items.map((item) => (
+                {order.items.map((item) => {
+                  const lineImage = commerceOrderItemImage(item);
+                  return (
                   <div
                     key={item.id}
                     className="flex gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
                     onClick={() => navigate({ view: 'product', id: String(item.listing?.id || '') })}
                   >
                     <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                      {item.listing_image ? (
+                      {lineImage ? (
                         <Image
-                          src={item.listing_image}
-                          alt={item.listing_title}
+                          src={lineImage}
+                          alt={commerceOrderItemTitle(item)}
                           fill
                           className="object-cover"
                           sizes="64px"
@@ -361,17 +367,18 @@ export function OrderDetailPage() {
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium text-foreground line-clamp-1">
-                        {item.listing_title}
+                        {commerceOrderItemTitle(item)}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {formatTZS(item.listing_price)} × {item.quantity}
+                        {formatTZS(commerceOrderItemUnitPrice(item))} × {item.quantity}
                       </p>
                     </div>
                     <span className="text-sm font-semibold flex-shrink-0">
-                      {formatTZS(item.total)}
+                      {formatTZS(commerceOrderItemLineTotal(item))}
                     </span>
                   </div>
-                ))}
+                );
+                })}
               </CardContent>
             </Card>
           </div>

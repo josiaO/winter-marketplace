@@ -92,6 +92,13 @@ const PAYMENT_METHODS: Array<{
     icon: CreditCard,
     djangoMethod: 'card',
   },
+  {
+    value: 'cash_on_delivery',
+    label: 'Cash on delivery',
+    description: 'Pay when you receive the order (no online checkout)',
+    icon: Truck,
+    djangoMethod: 'cash_on_delivery',
+  },
 ];
 
 function getPaymentEnums(value: string): {
