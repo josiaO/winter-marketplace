@@ -193,8 +193,8 @@ class RegisterSerializer(serializers.ModelSerializer):
             data['password'] = data['password1']
         if 'password2' in data and 'password_confirm' not in data:
             data['password_confirm'] = data['password2']
-        if 'confirmPassword' in data and 'password_confirm' not in data:
-            data['password_confirm'] = data['confirmPassword']
+        if ('confirmPassword' in data or 'confirm_password' in data) and 'password_confirm' not in data:
+            data['password_confirm'] = data.get('confirmPassword') or data.get('confirm_password')
         return super().to_internal_value(data)
 
     def validate_password(self, value):

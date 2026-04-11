@@ -171,6 +171,75 @@ class AnalyticsService:
         }
 
     @staticmethod
+    def get_platform_metrics():
+        """Aggregates high-level platform performance metrics for Analytics view."""
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        
+        # 1. GMV and Commissions
+        order_metrics = Order.objects.filter(status__in=['completed', 'delivered']).aggregate(
+            gmv=Sum('total_amount'),
+            commission=Sum('platform_fee')
+        )
+        
+        # 2. Escrow Status
+        escrow_metrics = EngTxn.objects.aggregate(
+            held=Sum('amount', filter=Q(status=_TS.HOLD)),
+            released=Sum('amount', filter=Q(status=_TS.RELEASED))
+        )
+        
+        # 3. Active Users (Last 30 days)
+        # Using date_joined or last_login as proxy, or Visitors
+        active_users_30d = User.objects.filter(
+            Q(last_login__gte=thirty_days_ago) | Q(date_joined__gte=thirty_days_ago)
+        ).count()
+        
+        # 4. Conversion Rate (Orders / Unique Visitors)
+        total_visitors = Visitor.objects.filter(last_seen__gte=thirty_days_ago).count()
+        total_orders_30d = Order.objects.filter(created_at__gte=thirty_days_ago).count()
+        conversion_rate = (total_orders_30d / total_visitors * 100) if total_visitors > 0 else 0
+        
+        # 5. Avg Order Value
+        avg_order_value = Order.objects.filter(status__in=['completed', 'delivered']).aggregate(
+            avg=Avg('total_amount')
+        )['avg'] or 0
+        
+        # 6. Top Categories
+        from marketplace.models import Category
+        top_categories = Listing.objects.values('category__name').annotate(
+            count=Count('id')
+        ).order_by('-count')[:10]
+        
+        # 7. Top Sellers
+        top_sellers = Order.objects.filter(status__in=['completed', 'delivered']).values(
+            'seller__username', 'seller__first_name', 'seller__last_name'
+        ).annotate(
+            revenue=Sum('total_amount'),
+            orders=Count('id')
+        ).order_by('-revenue')[:10]
+        
+        return {
+            'total_gmv': float(order_metrics['gmv'] or 0),
+            'total_commission': float(order_metrics['commission'] or 0),
+            'total_escrow_held': float(escrow_metrics['held'] or 0),
+            'total_payouts_released': float(escrow_metrics['released'] or 0),
+            'active_users_30d': active_users_30d,
+            'conversion_rate': round(float(conversion_rate), 2),
+            'avg_order_value': float(avg_order_value),
+            'top_categories': [
+                {'category': item['category__name'] or 'Uncategorized', 'count': item['count']}
+                for item in top_categories
+            ],
+            'top_sellers': [
+                {
+                    'seller': f"{item['seller__first_name']} {item['seller__last_name']}".strip() or item['seller__username'],
+                    'revenue': float(item['revenue'] or 0), 
+                    'orders': item['orders']
+                }
+                for item in top_sellers
+            ]
+        }
+
+    @staticmethod
     def get_public_stats_summary():
         """Curated public stats for homepage social proof."""
         raw_listings = Listing.objects.filter(is_published=True, deleted_at__isnull=True).count()

@@ -114,6 +114,16 @@ class SellerProfile(BaseModel):
         help_text=_('Legacy primary category; kept in sync with the first entry in store_categories.'),
     )
     store_location = models.CharField(max_length=100, blank=True)
+    seller_type = models.CharField(
+        max_length=20,
+        choices=(
+            ('product', _('Physical / Digital Product')),
+            ('service', _('Service')),
+        ),
+        default='product',
+        db_index=True,
+        help_text=_('Whether the seller offers products or services.'),
+    )
     store_logo = models.ImageField(
         upload_to='store_logos/',
         blank=True,

@@ -1,45 +1,40 @@
-from .models import Visitor
-from .tracking_service import TrackingService
+from .tasks import track_visitor_event_task
 
 class VisitorTrackingMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
 
     def __call__(self, request):
-        # Skip tracking for admin, static, media, and API endpoints (except listing views)
+        # 1. Capture metadata from the request before response processing
         path = request.path
-        should_track_pageview = not any([
+        should_track = not any([
             path.startswith('/admin'),
             path.startswith('/static'),
             path.startswith('/media'),
-            path.startswith('/api/v1/insights/track'),  # Don't double-track
+            path.startswith('/api/v1/insights/track'),
         ])
         
-        if not request.session.session_key:
-            request.session.create()
+        # Use existing session key if available, but do not force creation
+        # to avoid recursive writes and infinite loops with instrumentation.
+        session_key = getattr(request.session, 'session_key', None)
+        ip_address = self.get_client_ip(request)
+        user_agent = request.META.get("HTTP_USER_AGENT", "")
 
-        session_key = request.session.session_key
-
-        # Update or create Visitor record (for backward compatibility)
-        visitor, created = Visitor.objects.get_or_create(
-            session_key=session_key,
-            defaults={
-                "ip_address": self.get_client_ip(request),
-                "user_agent": request.META.get("HTTP_USER_AGENT", "")
-            }
-        )
-
-        if not created:
-            visitor.visit_count += 1
-            visitor.save(update_fields=["visit_count", "last_seen"])
-        
-        # Track page_view event for analytics
-        if should_track_pageview:
-            TrackingService.track_from_request(
-                request=request,
-                event_type='page_view',
-                metadata={'path': path, 'method': request.method}
+        # 2. Dispatch to Celery task for async persistence
+        # Wrap in try-except to ensure tracking failures don't crash the request/response cycle.
+        try:
+            track_visitor_event_task.delay(
+                session_key=session_key,
+                ip_address=ip_address,
+                user_agent=user_agent,
+                path=path,
+                method=request.method,
+                event_type='page_view' if should_track else None,
+                metadata={'path': path, 'method': request.method} if should_track else {}
             )
+        except Exception:
+            # Silently fail analytics capture to maintain site availability
+            pass
 
         return self.get_response(request)
 

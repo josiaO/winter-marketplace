@@ -210,28 +210,27 @@ class OrderSerializer(serializers.ModelSerializer):
         """Get comprehensive buyer information."""
         if not obj.buyer:
             return None
-        try:
-            profile = getattr(obj.buyer, 'profile', None)
-            return {
-                'id': obj.buyer.id,
-                'username': obj.buyer.username,
-                'email': obj.buyer.email,
-                'first_name': obj.buyer.first_name,
-                'last_name': obj.buyer.last_name,
-                'full_name': obj.buyer.get_full_name() or obj.buyer.username,
-                'phone_number': profile.phone_number if profile else None,
-                'address': profile.address if profile else None,
-                'profile_image': profile.image.url if profile and profile.image else None,
-            }
-        except Exception:
-            return {
-                'id': obj.buyer.id,
-                'username': obj.buyer.username,
-                'email': obj.buyer.email,
-                'first_name': obj.buyer.first_name,
-                'last_name': obj.buyer.last_name,
-                'full_name': obj.buyer.get_full_name() or obj.buyer.username,
-            }
+        
+        # Use prefetched profile if available
+        profile = getattr(obj.buyer, 'profile', None)
+        
+        details = {
+            'id': obj.buyer.id,
+            'username': obj.buyer.username,
+            'email': obj.buyer.email,
+            'first_name': obj.buyer.first_name,
+            'last_name': obj.buyer.last_name,
+            'full_name': obj.buyer.get_full_name() or obj.buyer.username,
+        }
+        
+        if profile:
+            details.update({
+                'phone_number': profile.phone_number,
+                'address': profile.address,
+                'profile_image': profile.image.url if profile.image else None,
+            })
+            
+        return details
     
     @extend_schema_field(serializers.DictField(child=serializers.CharField(), allow_null=True))
     def get_buyer_location(self, obj):
@@ -257,59 +256,49 @@ class OrderSerializer(serializers.ModelSerializer):
         """Get comprehensive seller information."""
         if not obj.seller:
             return None
-        try:
-            profile = getattr(obj.seller, 'profile', None)
-            # Check for seller profile (business info)
-            seller_profile = getattr(obj.seller, 'seller_profile', None)
-            return {
-                'id': obj.seller.id,
-                'username': obj.seller.username,
-                'email': obj.seller.email,
-                'first_name': obj.seller.first_name,
-                'last_name': obj.seller.last_name,
-                'full_name': obj.seller.get_full_name() or obj.seller.username,
-                'phone_number': profile.phone_number if profile else None,
-                'address': profile.address if profile else None,
-                'profile_image': profile.image.url if profile and profile.image else None,
-                'business_name': seller_profile.business_name if seller_profile else None,
-            }
-        except Exception:
-            return {
-                'id': obj.seller.id,
-                'username': obj.seller.username,
-                'email': obj.seller.email,
-                'first_name': obj.seller.first_name,
-                'last_name': obj.seller.last_name,
-                'full_name': obj.seller.get_full_name() or obj.seller.username,
-            }
+            
+        profile = getattr(obj.seller, 'profile', None)
+        seller_profile = getattr(obj.seller, 'seller_profile', None)
+        
+        details = {
+            'id': obj.seller.id,
+            'username': obj.seller.username,
+            'email': obj.seller.email,
+            'first_name': obj.seller.first_name,
+            'last_name': obj.seller.last_name,
+            'full_name': obj.seller.get_full_name() or obj.seller.username,
+        }
+        
+        if profile:
+            details.update({
+                'phone_number': profile.phone_number,
+                'address': profile.address,
+                'profile_image': profile.image.url if profile.image else None,
+            })
+            
+        if seller_profile:
+            details['business_name'] = seller_profile.business_name
+            
+        return details
     
     @extend_schema_field(serializers.DictField(child=serializers.CharField(), allow_null=True))
     def get_escrow(self, obj):
-        """
-        Return escrow state from the engine Transaction linked to this order.
-        Uses order.engine_transaction (set by escrow_engine.Transaction.linked_order).
-        """
-        try:
-            txn = obj.engine_transaction
+        """Get the linked engine transaction status."""
+        # obj.engine_transaction is a OneToOneField from escrow_engine.Transaction
+        # Check if it was prefetched or already fetched
+        txn = getattr(obj, 'engine_transaction', None)
+        if txn:
             return {
                 'id': str(txn.id),
                 'reference': txn.reference,
+                'status': txn.status,
                 'amount': str(txn.amount),
                 'currency': txn.currency,
-                'status': txn.status,
-                'payment_method': txn.payment_method,
-                'gateway_reference': txn.gateway_reference,
-                'payment_reference': txn.gateway_reference,
-                'held_at': txn.held_at.isoformat() if txn.held_at else None,
-                'released_at': txn.released_at.isoformat() if txn.released_at else None,
-                'refunded_at': txn.refunded_at.isoformat() if txn.refunded_at else None,
-                'dispute_reason': txn.dispute_reason or None,
                 'dispute_resolved_by': (
                     txn.dispute_resolved_by.id if txn.dispute_resolved_by else None
                 ),
             }
-        except Exception:
-            return None
+        return None
 
 
 # Note: EscrowTransactionSerializer and PayoutSerializer have been removed 

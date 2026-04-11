@@ -139,6 +139,7 @@ class StoreSetupView(APIView):
         sp.store_category_other = (d.get('store_category_other') or '').strip()
         sp.store_location = d['store_location'].strip()
         sp.store_description = (d.get('store_description') or '').strip()
+        sp.seller_type = d.get('seller_type', 'product')
         sp.business_name = sp.store_name
         sp.save()
 
@@ -161,6 +162,7 @@ class StoreSetupView(APIView):
                 'store_category_other': sp.store_category_other,
                 'store_location': sp.store_location,
                 'store_description': sp.store_description,
+                'seller_type': sp.seller_type,
                 'verification_status': sp.verification_status,
                 'is_active': sp.is_active,
             }

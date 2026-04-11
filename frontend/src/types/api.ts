@@ -122,7 +122,7 @@ export interface OtpPayload {
 
 export interface OtpVerifyPayload {
   email: string;
-  otp: string;
+  code: string;
 }
 
 // ============ Listing / Catalog Types ============
@@ -520,7 +520,9 @@ export interface Report {
 }
 
 export interface CreateReportPayload {
-  listing: number;
+  listing?: number | null;
+  reported_user?: number | null;
+  report_type?: 'listing' | 'user' | 'review' | 'message';
   reason: ReportReason;
   description: string;
 }
@@ -562,9 +564,10 @@ export interface Conversation {
   participants: ConversationParticipant[];
   last_message: {
     id: number;
-    content: string;
+    text: string;
     created_at: string;
     sender: number;
+    is_read?: boolean;
   } | null;
   unread_count: number;
   listing?: Listing | null;
@@ -576,9 +579,11 @@ export interface Message {
   id: number;
   conversation: number;
   sender: number;
-  content: string;
+  text: string;
   attachment: string | null;
-  read: boolean;
+  read_at: string | null;
+  status?: string;
+  is_deleted?: boolean;
   created_at: string;
 }
 

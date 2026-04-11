@@ -156,6 +156,19 @@ export const SellerPaymentMethodPageView = dynamic(
   { ssr: false },
 );
 
+export const SellerStoreSetupPageView = dynamic(
+  () => import('@/views/seller-store-setup').then((m) => m.SellerStoreSetupPage),
+  { ssr: false },
+);
+export const SellerVerifyIdentityPageView = dynamic(
+  () => import('@/views/seller-verify-identity').then((m) => m.SellerVerifyIdentityPage),
+  { ssr: false },
+);
+export const SellerAddPayoutPageView = dynamic(
+  () => import('@/views/seller-add-payout').then((m) => m.SellerAddPayoutPage),
+  { ssr: false },
+);
+
 export const AdminDashboardPageView = dynamic(
   () => import('@/views/admin-dashboard').then((m) => m.AdminDashboardPage),
   { ssr: false },

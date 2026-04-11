@@ -18,8 +18,12 @@ import {
   ChevronLeft,
   ChevronRight,
   AlertTriangle,
+  ArrowRight,
+  MessageSquare,
   Flag,
   XCircle,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -37,6 +41,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
+import { Textarea } from '@/components/ui/textarea';
 import { useAuthStore, useCartStore } from '@/store';
 import { fetchCartForStore } from '@/lib/django-cart-adapter';
 import { api } from '@/lib/api-client';
@@ -47,6 +52,7 @@ import {
   type Listing,
   type ListingAttributeValueRow,
   type Review,
+  type Order,
   type PaginatedResponse,
   type ReportReason,
 } from '@/types/api';
@@ -92,7 +98,7 @@ function collectSpecificationRows(listing: Listing): Array<{ label: string; valu
 
 export function ProductPage({ productId }: { productId: string }) {
   const router = useRouter();
-  const { isAuthenticated } = useAuthStore();
+  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
   const { setCart } = useCartStore();
   const [listing, setListing] = useState<Listing | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -109,39 +115,94 @@ export function ProductPage({ productId }: { productId: string }) {
   const [reportDescription, setReportDescription] = useState('');
   const [isReporting, setIsReporting] = useState(false);
 
-  // Fetch listing detail
+  // Review System State
+  const [canReview, setCanReview] = useState(false);
+  const [reviewOrder, setReviewOrder] = useState<Order | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
+  const fetchReviews = useCallback(async () => {
+    if (!productId) return;
+    setIsLoadingReviews(true);
+    try {
+      const data = await api.trust.reviews({ listing: productId });
+      setReviews(data.results);
+    } catch {
+      console.error('Failed to load reviews');
+    } finally {
+      setIsLoadingReviews(false);
+    }
+  }, [productId]);
+
+  // Parallelize core data fetching
   useEffect(() => {
     if (!productId) return;
     setIsLoading(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    api.listings
-      .detail(productId)
-      .then((data) => {
-        setListing(data);
-        // Set initial image to primary
-        const primaryIdx = data.images?.findIndex((img) => img.is_primary);
+    const loadData = async () => {
+      try {
+        // Core data can always be fetched
+        const [listingData, reviewsData] = await Promise.all([
+          api.listings.detail(productId),
+          api.trust.reviews({ listing: productId }),
+        ]);
+
+        setListing(listingData);
+        setReviews(reviewsData.results);
+        setIsLoadingReviews(false);
+
+        // Set primary image
+        const primaryIdx = listingData.images?.findIndex((img) => img.is_primary);
         if (primaryIdx >= 0) setSelectedImage(primaryIdx);
-      })
-      .catch(() => {
+
+        // Optional eligibility check (don't block main UI for this)
+        // Optional eligibility check (don't block main UI for this)
+        if (!isAuthLoading && isAuthenticated && user) {
+          api.commerce.orders({ status: 'delivered', role: 'buyer' })
+            .then((res) => {
+              const eligibleOrder = res.results.find((o: Order) =>
+                o.items.some((item) => {
+                  const itemId = item.listing_id || (item.listing as any)?.id;
+                  return String(itemId) === String(productId);
+                }),
+              );
+              if (eligibleOrder) {
+                setCanReview(true);
+                setReviewOrder(eligibleOrder);
+              }
+            })
+            .catch((err) => console.error('Eligibility check failed', err));
+        }
+      } catch (err) {
         toast.error('Failed to load product');
         router.push(routes.home());
-      })
-      .finally(() => setIsLoading(false));
-  }, [productId, router]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-  // Fetch reviews
-  useEffect(() => {
-    if (!productId) return;
-    setIsLoadingReviews(true);
-    api.trust
-      .reviews({ listing: productId })
-      .then((res) => {
-        setReviews(res.results || []);
-      })
-      .catch(() => setReviews([]))
-      .finally(() => setIsLoadingReviews(false));
-  }, [productId]);
+    void loadData();
+  }, [productId, router, isAuthenticated, user, isAuthLoading]);
+
+  const handleSubmitReview = async () => {
+    if (!reviewOrder) return;
+    setIsSubmittingReview(true);
+    try {
+      await api.commerce.reviewOrder(reviewOrder.id, {
+        rating: reviewRating,
+        comment: reviewComment,
+      });
+      toast.success('Review submitted successfully!');
+      setCanReview(false);
+      fetchReviews();
+    } catch (err) {
+      toast.error('Failed to submit review');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   // Fetch related products (same category)
   useEffect(() => {
@@ -324,8 +385,10 @@ export function ProductPage({ productId }: { productId: string }) {
       ? reviews.reduce((sum, r) => sum + r.rating, 0) / reviews.length
       : 0;
 
-  // Backend may return seller info under different keys, and may be missing for some listings.
-  const sellerUser: any = (listing as any).seller ?? (listing as any).owner ?? null;
+  // Backend may return seller info under different keys, and may be an ID or an object.
+  const sellerData: any = (listing as any).seller ?? (listing as any).owner ?? null;
+  const sellerUser = typeof sellerData === 'object' ? sellerData : null;
+  const sellerId = typeof sellerData === 'object' ? sellerData?.id : sellerData;
 
   const sellerFullName =
     sellerUser?.first_name && sellerUser?.last_name
@@ -563,13 +626,27 @@ export function ProductPage({ productId }: { productId: string }) {
                 variant="outline"
                 size="sm"
                 className="text-xs h-8 rounded-lg"
-                onClick={() => {
-                  const sellerId = sellerUser?.id;
-                  if (sellerId) router.push(routes.sellerProfile(String(sellerId)));
+                onClick={async () => {
+                  if (isAuthLoading) return;
+                  if (!isAuthenticated) {
+                    toast.error('Please login to message the seller');
+                    return;
+                  }
+                  const targetSellerId = sellerId;
+                  if (!targetSellerId) return;
+                  try {
+                    const conv = await api.communications.startConversation({
+                      seller_id: targetSellerId,
+                      listing_id: Number(productId),
+                    });
+                    router.push(routes.messageThread(String(conv.id)));
+                  } catch (err) {
+                    toast.error('Failed to start conversation');
+                  }
                 }}
-                disabled={!sellerUser?.id}
+                disabled={!sellerId}
               >
-                <MessageCircle className="w-3.5 h-3.5 mr-1" />
+                <MessageSquare className="w-3.5 h-3.5 mr-1" />
                 Message
               </Button>
             </div>
@@ -727,10 +804,67 @@ export function ProductPage({ productId }: { productId: string }) {
                 </div>
               ))}
             </div>
+
+            {/* Rating Summary Logic moved, Form moved to main list top */}
           </div>
 
           {/* Reviews List */}
-          <div className="lg:col-span-2 space-y-4">
+          <div className="lg:col-span-2 space-y-6">
+            {canReview && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.98 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="p-6 rounded-2xl border-2 border-emerald-500/20 bg-emerald-50/30 dark:bg-emerald-900/10 shadow-sm"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <Star className="w-5 h-5 text-emerald-600 fill-emerald-600" />
+                  <h4 className="text-lg font-bold text-foreground">
+                    Share your experience
+                  </h4>
+                </div>
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <button
+                        key={i}
+                        onClick={() => setReviewRating(i + 1)}
+                        className="focus:outline-none transition-all hover:scale-110"
+                      >
+                        <Star
+                          className={`w-7 h-7 ${
+                            i < reviewRating
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'text-gray-300 dark:text-gray-600'
+                          }`}
+                        />
+                      </button>
+                    ))}
+                  </div>
+                  <Textarea
+                    placeholder="Tell others what you think about this product..."
+                    value={reviewComment}
+                    onChange={(e) => setReviewComment(e.target.value)}
+                    className="text-base rounded-xl min-h-[100px] bg-background"
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="lg"
+                      className="px-8 rounded-xl bg-emerald-600 hover:bg-emerald-700 font-semibold"
+                      onClick={handleSubmitReview}
+                      disabled={isSubmittingReview}
+                    >
+                      {isSubmittingReview ? (
+                        <Loader2 className="w-5 h-5 animate-spin mr-2" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 mr-2" />
+                      )}
+                      Submit Review
+                    </Button>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
             {isLoadingReviews ? (
               <div className="space-y-4">
                 {Array.from({ length: 3 }).map((_, i) => (

@@ -92,9 +92,8 @@ if not SECRET_KEY:
     SECRET_KEY = get_random_secret_key()
 
 # DEBUG should be False in production. Control via environment variable.
-# Default to True in development to ensure static/media files are served correctly.
-default_debug = 'True' if os.getenv('DJANGO_ENV') == 'production' else 'True'
-DEBUG = os.getenv('DEBUG', default_debug).lower() in ('1', 'true', 'yes')
+# Fallback to False for safety; explicitly set to True in local .env for development.
+DEBUG = os.getenv('DEBUG', 'false').lower() in ('1', 'true', 'yes')
 
 
 def show_debug_toolbar(request):
@@ -103,43 +102,32 @@ def show_debug_toolbar(request):
 
     return dj_settings.DEBUG
 
+# Allowed hosts configuration
+_ALLOWED_HOSTS_ENV = os.getenv('ALLOWED_HOSTS', '').strip()
 
-# 1. Get the string of hosts from your environment (which came from .env)
-HOSTS_STRING = os.environ.get('ALLOWED_HOSTS', '') 
-
-# 2. Split the string by commas to create the required Python list
-
-# Allow hosts from an environment variable (comma-separated). Default includes localhost for local dev.
-# Allowed hosts (read from environment, fallback to sensible defaults)
-# Example environment values:
-#  - ALLOWED_HOSTS="smartdalali.onrender.com"
-#  - ALLOWED_HOSTS=".onrender.com,localhost,127.0.0.1"
-allowed_hosts_env = os.getenv('ALLOWED_HOSTS', '').strip()
-
-if allowed_hosts_env:
-    # Split on commas, strip whitespace, ignore empty items
-    ALLOWED_HOSTS = [h.strip() for h in allowed_hosts_env.split(',') if h.strip()]
+if _ALLOWED_HOSTS_ENV:
+    ALLOWED_HOSTS = [h.strip() for h in _ALLOWED_HOSTS_ENV.split(',') if h.strip()]
+elif DEBUG:
+    # Development defaults
+    ALLOWED_HOSTS = ['*']
 else:
-    # Development / fallback defaults
-    # In DEBUG, allow all hosts so the admin panel works via LAN IPs (e.g. http://10.x.x.x:8000/admin/).
-    # Production safety is enforced by the DJANGO_ENV=production guard below.
-    ALLOWED_HOSTS = ["*"] if DEBUG else ["smartdalali.onrender.com", "localhost", "127.0.0.1"]
-
-# Development ergonomics: even if a developer has ALLOWED_HOSTS set in their shell,
-# DEBUG mode should remain reachable via LAN IPs for admin/testing.
-if DEBUG and os.getenv('DJANGO_ENV') != 'production':
-    ALLOWED_HOSTS = ["*"]
+    # Production safety: requires explicit ALLOWED_HOSTS env var
+    ALLOWED_HOSTS = []
 
 # Validate production settings
-if os.getenv('DJANGO_ENV') == 'production':
-    if DEBUG:
-        raise ValueError("DEBUG must be False in production. Set DEBUG=False in environment.")
+if not DEBUG or os.getenv('DJANGO_ENV') == 'production':
     if not ALLOWED_HOSTS or '*' in ALLOWED_HOSTS:
-        raise ValueError("ALLOWED_HOSTS must be explicitly set in production and not contain '*'.")
+        # In production/deployment, we MUST have a restricted list of hosts
+        if os.getenv('DJANGO_ENV') == 'production':
+             raise ValueError("ALLOWED_HOSTS must be explicitly set in production and not contain '*'.")
+        
     if not os.getenv('CSRF_TRUSTED_ORIGINS'):
-        raise ValueError("CSRF_TRUSTED_ORIGINS must be explicitly set in production.")
+        if os.getenv('DJANGO_ENV') == 'production':
+            raise ValueError("CSRF_TRUSTED_ORIGINS must be explicitly set in production.")
+    
     if not os.getenv('CORS_ALLOWED_ORIGINS'):
-        raise ValueError("CORS_ALLOWED_ORIGINS must be explicitly set in production.")
+        if os.getenv('DJANGO_ENV') == 'production':
+            raise ValueError("CORS_ALLOWED_ORIGINS must be explicitly set in production.")
 
 # Security-sensitive settings that should be set for production.
 SESSION_COOKIE_SECURE = not DEBUG
@@ -193,7 +181,8 @@ SESSION_SAVE_EVERY_REQUEST = False
 # when other apps (e.g. cachalot with ENABLE_CACHALOT) or tooling import the package. Middleware and
 # URLs are DEBUG-only — no toolbar runs in production.
 # Silk: DEBUG only (heavier DB surface). Cachalot: DEBUG or ENABLE_CACHALOT=1 (explicit prod opt-in).
-_ENABLE_CACHALOT = os.getenv('ENABLE_CACHALOT', '').lower() in ('1', 'true', 'yes')
+ENABLE_CACHALOT = os.getenv('ENABLE_CACHALOT', '').lower() in ('1', 'true', 'yes')
+ENABLE_SILK = os.getenv('ENABLE_SILK', '').lower() in ('1', 'true', 'yes')
 
 INSTALLED_APPS = [
     'daphne',
@@ -253,10 +242,10 @@ INSTALLED_APPS = [
     'debug_toolbar',
 ]
 
-if DEBUG or _ENABLE_CACHALOT:
+if (DEBUG or ENABLE_CACHALOT) and not ENABLE_SILK:
     INSTALLED_APPS.append('cachalot')
 
-if DEBUG:
+if ENABLE_SILK:
     INSTALLED_APPS.append('silk')
 
 SITE_ID = 1
@@ -344,8 +333,6 @@ REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'accounts.authentication.FirebaseAuthentication',
         'rest_framework_simplejwt.authentication.JWTAuthentication',
-        # Enable session auth in development for browser/admin testing
-        *(['rest_framework.authentication.SessionAuthentication'] if DEBUG else []),
     ],
     'DEFAULT_FILTER_BACKENDS': [
         'django_filters.rest_framework.DjangoFilterBackend',
@@ -487,11 +474,11 @@ MARKETPLACE_PUBLISH_REQUIRES_IDENTITY_VERIFICATION = os.getenv(
 ).lower() in ('1', 'true', 'yes')
 
 _CORE_MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',  # Top priority for pre-flight handling
     'django.middleware.security.SecurityMiddleware',
     'core.middleware.CorrelationIdMiddleware',
     'escrow_engine.middleware.EscrowSecurityHeadersMiddleware',
     'whitenoise.middleware.WhiteNoiseMiddleware',
-    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.locale.LocaleMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -516,7 +503,7 @@ _SILK_MIDDLEWARE = [
 
 MIDDLEWARE = (
     _DEBUG_TOOLBAR_MIDDLEWARE
-    + (_SILK_MIDDLEWARE if DEBUG else [])
+    + (_SILK_MIDDLEWARE if ENABLE_SILK else [])
     + _CORE_MIDDLEWARE
 )
 
@@ -571,6 +558,13 @@ else:
         'default': {
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
+            'OPTIONS': {
+                # Wait up to 20s for the write lock to clear before raising
+                # OperationalError: database is locked. Eliminates spurious
+                # lock errors when Django admin, Celery beat, and API requests
+                # all hit the single SQLite file concurrently in development.
+                'timeout': 20,
+            },
         }
     }
 
@@ -583,11 +577,19 @@ if REDIS_URL:
             'LOCATION': REDIS_URL,
             'OPTIONS': {
                 'CLIENT_CLASS': 'django_redis.client.DefaultClient',
-                'IGNORE_EXCEPTIONS': True, # Don't crash if Redis is down
-            }
+                'IGNORE_EXCEPTIONS': False,  # Strict mode for production
+                'SOCKET_CONNECT_TIMEOUT': 5,
+                'SOCKET_TIMEOUT': 5,
+                'CONNECTION_POOL_KWARGS': {
+                    'max_connections': 25,
+                    'retry_on_timeout': True,
+                },
+            },
+            'KEY_PREFIX': 'smartdalali_prod',
         }
     }
     SESSION_ENGINE = 'django.contrib.sessions.backends.cache'
+
 else:
     CACHES = {
         'default': {

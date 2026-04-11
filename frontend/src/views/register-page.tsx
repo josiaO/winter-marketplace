@@ -14,6 +14,7 @@ import {
   Loader2,
   User,
   ShieldCheck,
+  Phone,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -34,10 +35,16 @@ const registerSchema = z
       .min(3, 'Username must be at least 3 characters')
       .max(20, 'Username must be at most 20 characters')
       .regex(/^[a-zA-Z0-9_]+$/, 'Only letters, numbers, and underscores allowed'),
-    email: z.email('Please enter a valid email address'),
+    email: z.string().email('Please enter a valid email address'),
+    phone_number: z
+      .string()
+      .min(9, 'Phone number must be at least 9 digits')
+      .regex(/^[0-9+\-()\s]+$/, 'Invalid phone number format'),
     password: z
       .string()
-      .min(6, 'Password must be at least 6 characters')
+      .min(8, 'Password must be at least 8 characters')
+      .regex(/[a-zA-Z]/, 'Password must contain at least one letter')
+      .regex(/[0-9]/, 'Password must contain at least one number')
       .max(100, 'Password is too long'),
     confirmPassword: z.string(),
   })
@@ -71,6 +78,7 @@ export function RegisterPage() {
     defaultValues: {
       username: '',
       email: '',
+      phone_number: '',
       password: '',
       confirmPassword: '',
     },
@@ -80,19 +88,16 @@ export function RegisterPage() {
     setError('');
     setIsLoading(true);
     try {
-      const result = await api.auth.register({
+      await api.auth.register({
         username: data.username,
         email: data.email,
+        phone_number: data.phone_number,
         password: data.password,
         confirm_password: data.confirmPassword,
       });
-
-      // Store tokens and user from registration response
-      api.setTokens(result.access, result.refresh);
-      setUser(result.user as unknown as Parameters<typeof setUser>[0]);
-
-      toast.success('Account created! Please verify your email.');
-      // Navigate to OTP verification
+      
+      toast.success('Account created! Please verify your identity.');
+      // Navigate to OTP verification page
       router.push(routes.registerVerify(data.email));
     } catch (err: unknown) {
       let message = 'Registration failed. Please try again.';
@@ -204,6 +209,26 @@ export function RegisterPage() {
                 </div>
                 {errors.email && (
                   <p className={errorText}>{errors.email.message}</p>
+                )}
+              </div>
+ 
+              {/* Phone Number */}
+              <div className="space-y-2">
+                <Label htmlFor="phone_number" className="text-sm font-medium">
+                  Phone Number <span className="text-destructive">*</span>
+                </Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                  <Input
+                    id="phone_number"
+                    placeholder="e.g. 0712345678"
+                    autoComplete="tel"
+                    className={inputClassName}
+                    {...register('phone_number')}
+                  />
+                </div>
+                {errors.phone_number && (
+                  <p className={errorText}>{errors.phone_number.message}</p>
                 )}
               </div>
 

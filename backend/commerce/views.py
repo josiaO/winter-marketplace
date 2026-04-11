@@ -59,7 +59,7 @@ class CartViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Cart.objects.none()
         return Cart.objects.filter(user=self.request.user)
-    
+
     def list(self, request, *args, **kwargs):
         cart = cart_svc.get_or_create_cart(user=request.user)
         serializer = self.get_serializer(cart)
@@ -225,7 +225,10 @@ class OrderViewSet(viewsets.ModelViewSet):
             'items__listing__media',
             'evidence',
         ).select_related(
-            'buyer', 'seller', 'engine_transaction'
+            'buyer__profile',
+            'seller__profile',
+            'seller__seller_profile',
+            'engine_transaction',
         )
 
     def create(self, request, *args, **kwargs):

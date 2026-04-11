@@ -3,6 +3,7 @@ from django.conf import settings
 from .constants import SellerVerificationStatus
 from django.utils.translation import gettext_lazy as _
 from marketplace.models import SellerProfile
+from core.encryption import get_encryptor
 
 
 class SellerIDVerification(models.Model):
@@ -42,7 +43,7 @@ class SellerIDVerification(models.Model):
         return f'ID verification for seller {self.seller_id}'
 
 
-from escrow_engine.models.payout import SELCOM_CHANNELS
+from escrow_engine.constants import SELCOM_CHANNELS
 
 class SellerPayoutAccount(models.Model):
     ACCOUNT_TYPE_CHOICES = SELCOM_CHANNELS
@@ -73,7 +74,30 @@ class SellerPayoutAccount(models.Model):
         ordering = ['-created_at']
 
     def __str__(self):
-        return f'{self.seller_id} {self.account_type} {self.account_number}'
+        return f'{self.seller_id} {self.account_type} {self.masked_account_number}'
+
+    def save(self, *args, **kwargs):
+        # Encrypt account_number if not already encrypted
+        if self.account_number and not self.account_number.startswith('Z0FBQUFB'): # Base64 for 'gAAAAA'
+             encryptor = get_encryptor()
+             self.account_number = encryptor.encrypt(self.account_number)
+        super().save(*args, **kwargs)
+
+    @property
+    def decrypted_account_number(self):
+        if not self.account_number:
+            return ""
+        encryptor = get_encryptor()
+        return encryptor.decrypt(self.account_number)
+
+    @property
+    def masked_account_number(self):
+        raw = self.decrypted_account_number
+        if not raw:
+            return "****"
+        if len(raw) <= 4:
+            return raw
+        return "****" + raw[-4:]
 
 
 class SellerOnboardingProgress(models.Model):

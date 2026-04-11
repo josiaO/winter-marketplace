@@ -113,7 +113,7 @@ export function AdminPayoutsPage() {
       return;
     }
     fetchPayouts();
-  }, [isAuthenticated, user, navigate, fetchPayouts]);
+  }, [isAuthenticated, user, router, fetchPayouts]);
 
   const handleProcessPayout = async (id: number) => {
     setProcessingId(id);

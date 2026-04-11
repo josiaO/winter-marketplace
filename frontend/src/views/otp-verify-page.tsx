@@ -122,7 +122,7 @@ export function OtpVerifyPage() {
     try {
       const result = await api.auth.verifyOtp({
         email,
-        otp: otpValue,
+        code: otpValue,
       });
       api.setTokens(result.access, result.refresh);
       let profile: User | null = null;

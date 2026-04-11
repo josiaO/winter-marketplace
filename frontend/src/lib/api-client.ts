@@ -845,6 +845,49 @@ class ApiClient {
       if (payload.bank_account_name) fd.append('bank_account_name', payload.bank_account_name);
       return this.post('/sellers/verification/business/', fd);
     },
+
+    /** Alias: POST /sellers/verification/identity/ (same as submitIdentityVerification) */
+    identitySubmit: (payload: {
+      id_type: string;
+      id_number: string;
+      id_front_image: File;
+      selfie_with_id: File;
+    }): Promise<any> => {
+      const fd = new FormData();
+      fd.append('id_type', payload.id_type);
+      fd.append('id_number', payload.id_number);
+      fd.append('id_front_image', payload.id_front_image);
+      fd.append('selfie_with_id', payload.selfie_with_id);
+      return this.post('/sellers/verification/identity/', fd);
+    },
+
+    /** POST /sellers/payout/add/ */
+    payoutAdd: (payload: {
+      account_type: string;
+      account_number: string;
+      account_name: string;
+      bank_code?: string;
+    }): Promise<{ message: string; payout_account_id: number }> =>
+      this.post('/sellers/payout/add/', payload),
+
+    /** POST /sellers/payout/verify/ */
+    payoutVerify: (payload: {
+      payout_account_id: number;
+      verification_code: string;
+    }): Promise<{ message: string }> =>
+      this.post('/sellers/payout/verify/', payload),
+
+    /** GET /sellers/admin/verifications/ */
+    adminVerifications: (params?: Record<string, string | number | boolean | null | undefined>): Promise<any> =>
+      this.get('/admin/sellers/', params),
+
+    /** POST /admin/sellers/:id/identity/approve/ */
+    adminVerifyApprove: (id: number | string): Promise<any> =>
+      this.post(`/admin/sellers/${id}/identity/approve/`),
+
+    /** POST /admin/sellers/:id/identity/reject/ */
+    adminVerifyReject: (id: number | string, payload: { reason: string }): Promise<any> =>
+      this.post(`/admin/sellers/${id}/identity/reject/`, payload),
   };
 
   // ===========================================================================
@@ -956,15 +999,15 @@ class ApiClient {
       this.get(`/communications/conversations/${conversationId}/messages/`, params),
 
     /** POST /communications/conversations/:id/messages/ */
-    sendMessage: (conversationId: number | string, payload: { content: string; attachment?: File }): Promise<Message> => {
+    sendMessage: (conversationId: number | string, payload: { text: string; attachment?: File }): Promise<Message> => {
       if (payload.attachment) {
         const fd = new FormData();
-        fd.append('content', payload.content);
+        fd.append('text', payload.text);
         fd.append('attachment', payload.attachment);
         return this.post(`/communications/conversations/${conversationId}/messages/`, fd);
       }
       return this.post(`/communications/conversations/${conversationId}/messages/`, {
-        content: payload.content,
+        text: payload.text,
       });
     },
 
@@ -1075,6 +1118,38 @@ class ApiClient {
       payload: { payment_method?: string; payment_channel?: string; buyer_phone?: string; buyer_name?: string; redirect_url?: string; cancel_url?: string }
     ): Promise<{ payment_url?: string; success: boolean; error?: string }> =>
       this.post(`/escrow/pay/links/${token}/pay/`, payload),
+
+    /** GET /escrow/disputes/ */
+    disputes: (
+      params?: Record<string, string | number | boolean | null | undefined>,
+    ): Promise<PaginatedResponse<Dispute>> =>
+      this.get('/escrow/disputes/', params),
+
+    /** GET /escrow/disputes/:id/ */
+    disputeDetail: (id: number | string): Promise<Dispute> =>
+      this.get(`/escrow/disputes/${id}/`),
+
+    /** POST /escrow/disputes/:id/respond/ (multipart) */
+    respondDispute: (
+      id: number | string,
+      payload: {
+        notes?: string;
+        evidence_video?: File;
+        evidence_images?: File[];
+      },
+    ): Promise<Dispute> => {
+      const fd = new FormData();
+      if (payload.notes) fd.append('notes', payload.notes);
+      if (payload.evidence_video) fd.append('evidence_video', payload.evidence_video);
+      if (payload.evidence_images) {
+        payload.evidence_images.forEach((f) => fd.append('evidence_images', f));
+      }
+      return this.post(`/escrow/disputes/${id}/respond/`, fd);
+    },
+
+    /** POST /escrow/disputes/:id/resolve/ (admin) */
+    resolveDispute: (id: number | string, payload: ResolveDisputePayload): Promise<Dispute> =>
+      this.post(`/escrow/disputes/${id}/resolve/`, payload),
   };
 
   // ===========================================================================
@@ -1086,9 +1161,13 @@ class ApiClient {
     adminStats: (): Promise<AdminStats> =>
       this.get('/insights/admin-stats/'),
 
+    /** GET /insights/platform-metrics/ */
+    platformMetrics: (): Promise<PlatformMetrics> =>
+      this.get('/insights/platform-metrics/'),
+
     /** GET /insights/user-growth/ (charts; other growth endpoints exist too) */
-    growthCharts: (): Promise<unknown> =>
-      this.get('/insights/user-growth/'),
+    growthCharts: (params?: { period?: string }): Promise<GrowthCharts> =>
+      this.get('/insights/user-growth/', params),
 
     /** GET /insights/seller-stats-summary/ */
     sellerStatsSummary: (): Promise<unknown> =>

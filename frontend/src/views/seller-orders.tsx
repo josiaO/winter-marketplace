@@ -14,10 +14,9 @@ import {
   Phone,
   Loader2,
   PackageOpen,
-  Send,
-  ImageOff,
   ChevronDown,
   ChevronUp,
+  ShieldAlert,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -80,6 +79,12 @@ export function SellerOrdersPage() {
   const [shipmentVideo, setShipmentVideo] = useState<File | null>(null);
   const [shipmentImages, setShipmentImages] = useState<File[]>([]);
   const [isShipping, setIsShipping] = useState(false);
+  
+  const [respondDisputeDialogOrder, setRespondDisputeDialogOrder] = useState<Order | null>(null);
+  const [disputeResponseNotes, setDisputeResponseNotes] = useState('');
+  const [disputeResponseImages, setDisputeResponseImages] = useState<File[]>([]);
+  const [disputeResponseVideo, setDisputeResponseVideo] = useState<File | null>(null);
+  const [isRespondingDispute, setIsRespondingDispute] = useState(false);
 
   const loadOrders = useCallback(async () => {
     setIsLoading(true);
@@ -167,6 +172,28 @@ export function SellerOrdersPage() {
       toast.error(message);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleRespondDispute = async () => {
+    if (!respondDisputeDialogOrder || !respondDisputeDialogOrder.dispute) return;
+    setIsRespondingDispute(true);
+    try {
+      await api.escrow.respondDispute(respondDisputeDialogOrder.dispute.id, {
+        notes: disputeResponseNotes.trim(),
+        evidence_video: disputeResponseVideo || undefined,
+        evidence_images: disputeResponseImages.length > 0 ? disputeResponseImages : undefined,
+      });
+      toast.success('Response submitted to dispute resolution team.');
+      setRespondDisputeDialogOrder(null);
+      setDisputeResponseNotes('');
+      setDisputeResponseImages([]);
+      setDisputeResponseVideo(null);
+      await loadOrders();
+    } catch {
+      toast.error('Failed to submit response.');
+    } finally {
+      setIsRespondingDispute(false);
     }
   };
 
@@ -317,6 +344,20 @@ export function SellerOrdersPage() {
                                     >
                                       <Send className="w-3.5 h-3.5" />
                                       Mark Shipped
+                                    </Button>
+                                  )}
+                                  {order.status === 'disputed' && (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="gap-1.5 text-xs shrink-0 border-orange-500 text-orange-600 hover:bg-orange-50"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setRespondDisputeDialogOrder(order);
+                                      }}
+                                    >
+                                      <ShieldAlert className="w-3.5 h-3.5" />
+                                      Respond to Dispute
                                     </Button>
                                   )}
                                   {canMarkArrived(order) && (
@@ -590,6 +631,107 @@ export function SellerOrdersPage() {
                   <>
                     <Send className="w-4 h-4" />
                     Confirm Shipment
+                  </>
+                )}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Respond to Dispute Dialog */}
+        <Dialog
+          open={!!respondDisputeDialogOrder}
+          onOpenChange={(open) => {
+            if (!open) {
+              setRespondDisputeDialogOrder(null);
+              setDisputeResponseNotes('');
+              setDisputeResponseImages([]);
+              setDisputeResponseVideo(null);
+            }
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-orange-600">
+                <ShieldAlert className="w-5 h-5" />
+                Respond to Dispute
+              </DialogTitle>
+              <DialogDescription>
+                Provide evidence to resolve the dispute for order #
+                {respondDisputeDialogOrder?.order_number?.slice(-8)}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label htmlFor="response-notes">Explanation / Counter-statement</Label>
+                <textarea
+                  id="response-notes"
+                  className="w-full min-h-[100px] p-3 rounded-xl border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none resize-none"
+                  placeholder="Explain your side of the story..."
+                  value={disputeResponseNotes}
+                  onChange={(e) => setDisputeResponseNotes(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Supporting Photos</Label>
+                <Input
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  onChange={(e) => {
+                    const files = Array.from(e.target.files || []);
+                    setDisputeResponseImages(files);
+                  }}
+                  className="cursor-pointer"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label>Video Evidence (Optional)</Label>
+                <Input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0] || null;
+                    setDisputeResponseVideo(file);
+                  }}
+                  className="cursor-pointer"
+                />
+              </div>
+              
+              <div className="rounded-lg bg-orange-50 dark:bg-orange-900/10 p-3 text-xs text-orange-600 dark:text-orange-400 flex gap-2">
+                <ShieldAlert className="w-4 h-4 shrink-0" />
+                <p>
+                  High-quality evidence (photos of the product before shipping, chat logs, receipts) helps
+                  resolved disputes much faster in your favor.
+                </p>
+              </div>
+            </div>
+
+            <DialogFooter className="gap-2 sm:gap-0">
+              <Button
+                variant="outline"
+                onClick={() => setRespondDisputeDialogOrder(null)}
+                disabled={isRespondingDispute}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleRespondDispute}
+                disabled={isRespondingDispute || !disputeResponseNotes.trim()}
+                className="bg-orange-600 hover:bg-orange-700 text-white gap-2"
+              >
+                {isRespondingDispute ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Submitting...
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    Submit Response
                   </>
                 )}
               </Button>

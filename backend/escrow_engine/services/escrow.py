@@ -77,14 +77,8 @@ def release_funds(
         _post_release_handler(txn)
 
         if txn.seller_user_id:
-            try:
-                create_payout(txn)
-            except Exception as exc:
-                logger.error(
-                    "Payout creation failed for transaction %s: %s",
-                    txn.reference,
-                    exc,
-                )
+            create_payout(txn)
+
 
     log_escrow_metric('escrow.release', reference=txn.reference, status=txn.status)
     logger.info("Funds released for transaction %s", txn.reference)

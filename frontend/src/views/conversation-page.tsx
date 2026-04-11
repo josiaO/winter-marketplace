@@ -45,7 +45,10 @@ export function ConversationPage({ conversationId }: { conversationId: string })
   const [sendingMessage, setSendingMessage] = useState(false);
   const [newMessage, setNewMessage] = useState('');
   const [attachment, setAttachment] = useState<File | null>(null);
-
+  const [isOtherTyping, setIsOtherTyping] = useState(false);
+  const [otherOnlineStatus, setOtherOnlineStatus] = useState(false);
+  const socketRef = useRef<WebSocket | null>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -70,7 +73,7 @@ export function ConversationPage({ conversationId }: { conversationId: string })
         page: 1,
         page_size: 100,
       });
-      setMessages(msgRes.results || []);
+      setMessages(msgRes?.results || []);
 
       // Fetch conversation details
       const convRes = await api.communications.conversations();
@@ -93,34 +96,71 @@ export function ConversationPage({ conversationId }: { conversationId: string })
   useEffect(() => {
     fetchConversation();
     
-    // Poll for new messages every 5 seconds
-    const interval = setInterval(async () => {
-      if (!isAuthenticated || !conversationId || sendingMessage) return;
-      try {
-        const msgRes = await api.communications.messages(conversationId, {
-          page: 1,
-          page_size: 100,
-        });
-        // Only update if count changed or different last message
-        setMessages((prev) => {
-          if (msgRes.results.length !== prev.length || 
-              (msgRes.results.length > 0 && msgRes.results[0].id !== prev[0]?.id)) {
-            return msgRes.results;
-          }
-          return prev;
-        });
-        
-        // Mark as read while polling if we are active
-        if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-          api.communications.markRead(conversationId).catch(() => {});
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-      }
-    }, 5000);
+    // Connect to WebSocket for real-time updates
+    if (isAuthenticated && conversationId) {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+      // Use token for auth — the JWTAuthMiddleware in backend handles this
+      const token = useAuthStore.getState().token;
+      const wsUrl = `${protocol}//${host}/ws/chat/${conversationId}/?token=${token}`;
+      
+      const socket = new WebSocket(wsUrl);
+      socketRef.current = socket;
 
-    return () => clearInterval(interval);
-  }, [fetchConversation, isAuthenticated, conversationId, sendingMessage]);
+      socket.onopen = () => {
+        console.log('Chat WebSocket connected');
+      };
+
+      socket.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === 'message') {
+            setMessages((prev) => {
+              // Avoid duplicates
+              if (prev.some(m => m.id === data.message.id)) return prev;
+              return [...prev, data.message];
+            });
+            // Mark as read locally if we're active
+            if (document.visibilityState === 'visible') {
+              api.communications.markRead(conversationId).catch(() => {});
+            }
+          } else if (data.type === 'typing') {
+            setIsOtherTyping(data.is_typing);
+            // Auto-clear typing after 3s if no new typing event
+            if (data.is_typing) {
+              if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+              typingTimeoutRef.current = setTimeout(() => setIsOtherTyping(false), 3000);
+            }
+          } else if (data.type === 'user_status') {
+            setOtherOnlineStatus(data.is_online);
+          }
+        } catch (err) {
+          console.error('WS Message parsing error:', err);
+        }
+      };
+
+      socket.onclose = () => {
+        console.log('Chat WebSocket disconnected');
+      };
+
+      return () => {
+        socket.close();
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      };
+    }
+  }, [fetchConversation, isAuthenticated, conversationId]);
+
+  // Handle outgoing typing indicator
+  useEffect(() => {
+    if (socketRef.current?.readyState === WebSocket.OPEN) {
+      const isTyping = newMessage.length > 0;
+      socketRef.current.send(JSON.stringify({
+        type: 'typing',
+        is_typing: isTyping
+      }));
+    }
+  }, [newMessage]);
 
   useEffect(() => {
     scrollToBottom();
@@ -136,10 +176,14 @@ export function ConversationPage({ conversationId }: { conversationId: string })
 
     try {
       const sent = await api.communications.sendMessage(conversationId!, {
-        content,
+        text: content,
         attachment: attachment || undefined,
       });
-      setMessages((prev) => [...prev, sent]);
+      // WebSocket will also broadcast this, but updating locally for instant feedback
+      setMessages((prev) => {
+        if (prev.some(m => m.id === sent.id)) return prev;
+        return [...prev, sent];
+      });
       toast.success('Message sent');
     } catch {
       toast.error('Failed to send message');
@@ -265,16 +309,32 @@ export function ConversationPage({ conversationId }: { conversationId: string })
                   {participantName}
                 </h1>
                 <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-1">
+                    <div className={cn(
+                      "w-2 h-2 rounded-full",
+                      otherOnlineStatus ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-gray-300 dark:bg-gray-600"
+                    )} />
+                    <span className="text-[10px] sm:text-xs text-muted-foreground">
+                      {isOtherTyping ? (
+                        <span className="text-emerald-600 dark:text-emerald-400 font-medium animate-pulse">
+                          Typing...
+                        </span>
+                      ) : (
+                        otherOnlineStatus ? "Online" : "Offline"
+                      )}
+                    </span>
+                  </div>
+                  <span className="text-muted-foreground/30 text-xs">•</span>
                   {listing && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground truncate">
+                    <span className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-none">
                       <Package className="w-3 h-3 flex-shrink-0" />
                       Re: {listing.title}
                     </span>
                   )}
                   {order && (
-                    <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground">
                       <ShoppingBag className="w-3 h-3 flex-shrink-0" />
-                      Order #{order.order_number}
+                      #{order.order_number}
                     </span>
                   )}
                 </div>

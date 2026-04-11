@@ -37,6 +37,11 @@ class StoreSetupSerializer(serializers.Serializer):
     )
     store_category_other = serializers.CharField(max_length=200, required=False, allow_blank=True, default='')
     store_location = serializers.CharField(max_length=100, allow_blank=False)
+    seller_type = serializers.ChoiceField(
+        choices=[('product', 'Product'), ('service', 'Service')],
+        required=False,
+        default='product',
+    )
     store_description = serializers.CharField(required=False, allow_blank=True, default='')
 
     def validate_store_categories(self, value):

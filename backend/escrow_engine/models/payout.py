@@ -8,25 +8,7 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 
-# All channels supported by the Selcom aggregator in Tanzania.
-# These map to what Selcom calls internally — we use them as the routing key.
-SELCOM_CHANNELS = (
-    # ── Mobile Money ──────────────────────────────────────────────────────────
-    ('mpesa',        'M-Pesa (Vodacom)'),
-    ('tigo_pesa',    'Tigo Pesa'),
-    ('airtel_money', 'Airtel Money'),
-    ('halopesa',     'HaloPesa'),
-    ('ezypesa',      'EzyPesa'),
-    ('azampesa',     'AzamPesa'),
-    # ── Banks (40+ via Selcom) ────────────────────────────────────────────────
-    ('bank',         'Bank Transfer (Selcom Bridge)'),
-    # ── Cards ─────────────────────────────────────────────────────────────────
-    ('card_visa',       'Visa Card'),
-    ('card_mastercard', 'Mastercard'),
-    ('card_unionpay',   'UnionPay'),
-    # ── Selcom Pay (Till / TanQR) ─────────────────────────────────────────────
-    ('till',         'Selcom Till / TanQR'),
-)
+from ..constants import SELCOM_CHANNELS
 
 
 class PayoutDestination(models.Model):

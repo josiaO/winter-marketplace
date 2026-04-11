@@ -18,8 +18,9 @@ import {
   Loader2,
   MapPin,
   Landmark,
-  Shield,
   CheckCircle2,
+  AlertCircle,
+  MessageSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatDate, getInitials } from '@/lib/helpers';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import type { User as DjangoUser } from '@/types/api';
 
 interface ProfileFormValues {
@@ -58,6 +60,7 @@ export function ProfilePage() {
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const {
     register,
@@ -90,6 +93,8 @@ export function ProfilePage() {
   useEffect(() => {
     if (!isAuthenticated) {
       router.push(routes.login());
+    } else {
+      api.communications.unreadCount().then((res) => setUnreadCount(res.unread_count));
     }
   }, [isAuthenticated, router]);
 
@@ -149,6 +154,19 @@ export function ProfilePage() {
   return (
     <div className="min-h-[80vh] px-4 py-8">
       <div className="max-w-3xl mx-auto space-y-6">
+        {unreadCount > 0 && (
+          <Alert className="border-blue-200 bg-blue-50/50 dark:border-blue-900/50 dark:bg-blue-900/20">
+            <MessageSquare className="w-4 h-4 text-blue-600" />
+            <AlertTitle className="text-blue-800 dark:text-blue-300">You have messages</AlertTitle>
+            <AlertDescription className="flex items-center justify-between text-xs sm:text-sm">
+              <span>You have {unreadCount} unread message{unreadCount > 1 ? 's' : ''} waiting for you.</span>
+              <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent" onClick={() => router.push(routes.messages())}>
+                Open Inbox
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Profile Header Card */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}

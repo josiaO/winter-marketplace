@@ -3,22 +3,10 @@
 import { useRouter } from 'next/navigation';
 import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
-  Shield,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  FileText,
-  ArrowUpRight,
-  Loader2,
-  ChevronLeft,
-  ChevronRight,
-  User,
-  FileCheck,
-  CreditCard,
-  BadgeCheck,
-  Image as ImageIcon,
+  Shield, CheckCircle2, XCircle, Clock, ArrowUpRight, Loader2,
+  ChevronLeft, ChevronRight, User, Image as ImageIcon, Briefcase, Eye
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -26,142 +14,37 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from '@/components/ui/textarea';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
-import { formatDate, getRelativeTime } from '@/lib/helpers';
-import type { Verification, DocumentStatus, PaginatedResponse } from '@/types/api';
+import { getRelativeTime } from '@/lib/helpers';
 
 const PAGE_SIZE = 20;
 
-// ---------------------------------------------------------------------------
-// Document status badge
-// ---------------------------------------------------------------------------
-
-function DocStatusBadge({ status }: { status: DocumentStatus }) {
-  const styles: Record<DocumentStatus, { className: string; icon: React.ElementType; label: string }> = {
-    approved: {
-      className: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
-      icon: CheckCircle2,
-      label: 'Approved',
-    },
-    pending: {
-      className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
-      icon: Clock,
-      label: 'Pending',
-    },
-    rejected: {
-      className: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
-      icon: XCircle,
-      label: 'Rejected',
-    },
-    not_submitted: {
-      className: 'bg-gray-100 text-gray-600 dark:bg-gray-900/30 dark:text-gray-400',
-      icon: FileText,
-      label: 'Not Submitted',
-    },
-  };
-
-  const { className, icon: Icon, label } = styles[status];
-
-  return (
-    <Badge className={`${className} text-xs gap-1`} variant="secondary">
-      <Icon className="w-3 h-3" />
-      {label}
-    </Badge>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Document card
-// ---------------------------------------------------------------------------
-
-interface DocCardProps {
-  label: string;
-  status: DocumentStatus;
-  documentUrl: string | null;
-  onApprove?: () => void;
-  onReject?: () => void;
-  loading?: boolean;
-}
-
-function DocCard({ label, status, documentUrl, onApprove, onReject, loading }: DocCardProps) {
-  return (
-    <div className="border rounded-lg p-3 space-y-2">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-foreground">{label}</p>
-        <DocStatusBadge status={status} />
-      </div>
-
-      {documentUrl && (
-        <p className="text-[10px] text-muted-foreground truncate" title={documentUrl}>
-          📎 {documentUrl.split('/').pop()}
-        </p>
-      )}
-
-      {/* Action buttons – only show when status is pending */}
-      {status === 'pending' && onApprove && onReject && (
-        <div className="flex items-center gap-2 pt-1">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1 flex-1 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950/30"
-            onClick={onApprove}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <CheckCircle2 className="w-3 h-3" />
-            )}
-            Approve
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1 flex-1 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950/30"
-            onClick={onReject}
-            disabled={loading}
-          >
-            {loading ? (
-              <Loader2 className="w-3 h-3 animate-spin" />
-            ) : (
-              <XCircle className="w-3 h-3" />
-            )}
-            Reject
-          </Button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Component
-// ---------------------------------------------------------------------------
-
 export function AdminVerificationsPage() {
   const router = useRouter();
-  const user = useAuthStore((s) => s.user);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const { user, isAuthenticated } = useAuthStore();
 
-  const [verifications, setVerifications] = useState<Verification[]>([]);
+  const [verifications, setVerifications] = useState<any[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('pending');
+  const [activeTab, setActiveTab] = useState('pending'); // pending, approved, rejected
   const [page, setPage] = useState(1);
-  const [actionLoading, setActionLoading] = useState<string | null>(null);
 
-  // ── Data fetching ──────────────────────────────────────────────────────
+  // Review Dialog State
+  const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [isActionLoading, setIsActionLoading] = useState(false);
+
   const fetchVerifications = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
-      if (activeTab !== 'all') params.status = activeTab;
-
-      const res: PaginatedResponse<Verification> = await api.trust.verifications(params);
-      setVerifications(res.results);
-      setTotalCount(res.count);
+      const params: any = { page, page_size: PAGE_SIZE, status: activeTab };
+      const res = await api.sellers.adminVerifications(params);
+      setVerifications(res.results || []);
+      setTotalCount(res.count || 0);
     } catch {
       toast.error('Failed to load verifications.');
     } finally {
@@ -177,240 +60,179 @@ export function AdminVerificationsPage() {
     fetchVerifications();
   }, [isAuthenticated, user, router, fetchVerifications]);
 
-  // ── Document actions ──────────────────────────────────────────────────────
-  const handleApproveDoc = async (verificationId: number, docType: 'id' | 'tin' | 'license') => {
-    const key = `${verificationId}-${docType}`;
-    setActionLoading(key);
+  const onApprove = async () => {
+    if (!selectedDoc) return;
+    setIsActionLoading(true);
     try {
-      const payload = { status: 'approved' as const, notes: 'Approved via admin dashboard' };
-      if (docType === 'id') {
-        await api.trust.approveVerificationId(verificationId, payload);
-      } else if (docType === 'tin') {
-        await api.trust.approveVerificationTin(verificationId, payload);
-      } else if (docType === 'license') {
-        await api.trust.approveVerificationLicense(verificationId, payload);
-      }
-      toast.success(`${docType.toUpperCase()} document approved.`);
+      await api.sellers.adminVerifyApprove(selectedDoc.id);
+      toast.success('Seller approved successfully.');
+      setSelectedDoc(null);
       fetchVerifications();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : `Failed to approve ${docType.toUpperCase()} document.`;
-      toast.error(msg);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to approve seller.');
     } finally {
-      setActionLoading(null);
+      setIsActionLoading(false);
     }
   };
 
-  const handleRejectDoc = async (verificationId: number, docType: 'id' | 'tin' | 'license') => {
-    const key = `${verificationId}-${docType}`;
-    setActionLoading(key);
+  const onReject = async () => {
+    if (!selectedDoc) return;
+    if (!rejectReason.trim()) return toast.error('You must provide a reason for rejection.');
+    setIsActionLoading(true);
     try {
-      const payload = { status: 'rejected' as const, notes: 'Rejected via admin dashboard' };
-      if (docType === 'id') {
-        await api.trust.approveVerificationId(verificationId, payload);
-      } else if (docType === 'tin') {
-        await api.trust.approveVerificationTin(verificationId, payload);
-      } else if (docType === 'license') {
-        await api.trust.approveVerificationLicense(verificationId, payload);
-      }
-      toast.success(`${docType.toUpperCase()} document rejected.`);
+      await api.sellers.adminVerifyReject(selectedDoc.id, { reason: rejectReason });
+      toast.success('Seller rejected.');
+      setSelectedDoc(null);
+      setRejectReason('');
       fetchVerifications();
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : `Failed to reject ${docType.toUpperCase()} document.`;
-      toast.error(msg);
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to reject seller.');
     } finally {
-      setActionLoading(null);
+      setIsActionLoading(false);
     }
   };
 
-  // ── Guard ──────────────────────────────────────────────────────────────
   if (!isAuthenticated || !user || user.role !== 'admin') return null;
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
-    <div className="min-h-[80vh] px-4 py-6 sm:py-8">
+    <div className="min-h-[80vh] px-4 py-8">
       <div className="max-w-7xl mx-auto space-y-6">
-        {/* ── Header ─────────────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-              <BadgeCheck className="w-7 h-7 text-emerald-600" />
-              Seller Verifications
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+              <Shield className="w-7 h-7 text-primary" /> Seller Verifications
             </h1>
-            <p className="text-muted-foreground mt-1">
-              Review and manage seller verification requests
-            </p>
+            <p className="text-muted-foreground mt-1">Review identity and store setups to ensure marketplace trust.</p>
           </div>
-          <Button
-            variant="outline"
-            className="gap-2 shrink-0"
-            onClick={() => router.push(routes.adminDashboard())}
-          >
-            <ArrowUpRight className="w-4 h-4" />
-            Dashboard
+          <Button variant="outline" className="gap-2 shrink-0" onClick={() => router.push(routes.adminDashboard())}>
+            <ArrowUpRight className="w-4 h-4" /> Dashboard
           </Button>
         </motion.div>
 
-        {/* ── Tabs + Content ─────────────────────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Card className="border-0 shadow-md shadow-black/5">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-lg">Verification Requests</CardTitle>
-                  <CardDescription className="mt-0.5">{totalCount} total verifications</CardDescription>
-                </div>
-                <Badge variant="secondary" className="bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400 text-xs px-2.5 py-0.5">
-                  {activeTab === 'pending' ? 'Review Queue' : activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setPage(1); }}>
-                <TabsList className="mb-4">
-                  <TabsTrigger value="pending" className="gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    Pending
-                  </TabsTrigger>
-                  <TabsTrigger value="approved" className="gap-1.5">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    Approved
-                  </TabsTrigger>
-                  <TabsTrigger value="rejected" className="gap-1.5">
-                    <XCircle className="w-3.5 h-3.5" />
-                    Rejected
-                  </TabsTrigger>
-                  <TabsTrigger value="all">All</TabsTrigger>
-                </TabsList>
+        <Card className="border-0 shadow-md">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">Verification Queue</CardTitle>
+              <CardDescription>{totalCount} total requests</CardDescription>
+            </div>
+            <Badge variant="secondary" className="bg-primary/20 text-primary uppercase text-xs">
+              {activeTab}
+            </Badge>
+          </CardHeader>
+          <CardContent>
+            <Tabs value={activeTab} onValueChange={(val) => { setActiveTab(val); setPage(1); }}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="pending" className="gap-1.5"><Clock className="w-4 h-4" /> Pending Review</TabsTrigger>
+                <TabsTrigger value="approved" className="gap-1.5"><CheckCircle2 className="w-4 h-4" /> Approved</TabsTrigger>
+                <TabsTrigger value="rejected" className="gap-1.5"><XCircle className="w-4 h-4" /> Rejected</TabsTrigger>
+              </TabsList>
 
-                <TabsContent value={activeTab}>
-                  {isLoading ? (
-                    <div className="space-y-4">
-                      {Array.from({ length: 4 }).map((_, i) => (
-                        <Skeleton key={i} className="h-44 w-full" />
-                      ))}
-                    </div>
-                  ) : verifications.length === 0 ? (
-                    <div className="text-center py-16">
-                      <Shield className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
-                      <h3 className="font-semibold text-foreground text-lg mb-1">
-                        No {activeTab !== 'all' ? activeTab : ''} verifications
-                      </h3>
-                      <p className="text-sm text-muted-foreground">
-                        {activeTab === 'pending'
-                          ? 'No pending verification requests at the moment.'
-                          : 'No verifications found.'}
-                      </p>
-                    </div>
-                  ) : (
-                    <>
-                      {/* Verification Cards */}
-                      <div className="space-y-4 max-h-[700px] overflow-y-auto pr-1">
-                        {verifications.map((v) => (
-                          <motion.div
-                            key={v.id}
-                            initial={{ opacity: 0, y: 8 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.2 }}
-                            className="border rounded-xl p-4 sm:p-5 space-y-4"
-                          >
-                            {/* User info row */}
-                            <div className="flex items-center justify-between">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-9 w-9">
-                                  <AvatarFallback className="text-xs bg-emerald-50 dark:bg-emerald-950/40">
-                                    <User className="w-4 h-4 text-emerald-600" />
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div>
-                                  <p className="text-sm font-medium">User #{v.user}</p>
-                                  <p className="text-xs text-muted-foreground">
-                                    Submitted {getRelativeTime(v.created_at)}
-                                  </p>
-                                </div>
-                              </div>
-                              <Badge
-                                variant="secondary"
-                                className="text-[10px] uppercase tracking-wider"
-                              >
-                                ID #{v.id}
-                              </Badge>
+              <TabsContent value={activeTab}>
+                {isLoading ? (
+                  <div className="space-y-4">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>
+                ) : verifications.length === 0 ? (
+                  <div className="text-center py-16 text-muted-foreground">
+                    <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+                    <h3 className="font-semibold text-foreground text-lg mb-1">Catch up complete!</h3>
+                    <p className="text-sm">There are no {activeTab} verify requests at the moment.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {verifications.map((v) => (
+                      <div key={v.id} className="border rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div className="flex items-center gap-4">
+                          <Avatar className="h-12 w-12"><AvatarFallback><User className="w-5 h-5" /></AvatarFallback></Avatar>
+                          <div>
+                            <p className="font-semibold text-sm">Seller ID: #{v.seller}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <Badge variant="outline" className="text-[10px]">{v.id_type}</Badge>
+                              <span className="text-xs text-muted-foreground">{v.id_number}</span>
                             </div>
-
-                            {/* Document grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                              <DocCard
-                                label="ID Document"
-                                status={v.id_status}
-                                documentUrl={v.national_id_front}
-                                onApprove={() => handleApproveDoc(v.id, 'id')}
-                                onReject={() => handleRejectDoc(v.id, 'id')}
-                                loading={actionLoading === `${v.id}-id`}
-                              />
-                              <DocCard
-                                label="TIN Document"
-                                status={v.tin_status}
-                                documentUrl={v.tin_certificate}
-                                onApprove={() => handleApproveDoc(v.id, 'tin')}
-                                onReject={() => handleRejectDoc(v.id, 'tin')}
-                                loading={actionLoading === `${v.id}-tin`}
-                              />
-                              <DocCard
-                                label="Business License"
-                                status={v.business_license_status}
-                                documentUrl={v.business_license_document}
-                                onApprove={() => handleApproveDoc(v.id, 'license')}
-                                onReject={() => handleRejectDoc(v.id, 'license')}
-                                loading={actionLoading === `${v.id}-license`}
-                              />
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-
-                      {/* Pagination */}
-                      {totalPages > 1 && (
-                        <div className="flex items-center justify-between mt-4 pt-4 border-t">
-                          <p className="text-sm text-muted-foreground">
-                            Page {page} of {totalPages} &middot; {totalCount} verifications
-                          </p>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={page <= 1}
-                              onClick={() => setPage((p) => p - 1)}
-                            >
-                              <ChevronLeft className="w-4 h-4" />
-                              Previous
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={page >= totalPages}
-                              onClick={() => setPage((p) => p + 1)}
-                            >
-                              Next
-                              <ChevronRight className="w-4 h-4" />
-                            </Button>
                           </div>
                         </div>
-                      )}
-                    </>
-                  )}
-                </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
-        </motion.div>
+                        <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
+                          <div className="text-right">
+                            <p className="text-xs text-muted-foreground font-medium">Submitted</p>
+                            <p className="text-xs">{getRelativeTime(v.submitted_at)}</p>
+                          </div>
+                          <Button size="sm" onClick={() => setSelectedDoc(v)} className="gap-1.5">
+                            <Eye className="w-4 h-4" /> Review
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+
+                    {totalPages > 1 && (
+                      <div className="flex items-center justify-between mt-4 pt-4 border-t">
+                        <p className="text-sm text-muted-foreground">Page {page} of {totalPages}</p>
+                        <div className="flex items-center gap-2">
+                          <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft className="w-4 h-4" /> Prev</Button>
+                          <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => p + 1)}>Next <ChevronRight className="w-4 h-4" /></Button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
+
+        {/* Review Dialog */}
+        <Dialog open={!!selectedDoc} onOpenChange={(open) => { if(!open) setSelectedDoc(null); }}>
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Review Document #{selectedDoc?.id}</DialogTitle>
+            </DialogHeader>
+            {selectedDoc && (
+              <div className="space-y-6 pt-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                     <p className="text-sm font-semibold">National ID / Document</p>
+                     <p className="text-xs text-muted-foreground">{selectedDoc.id_type} - {selectedDoc.id_number}</p>
+                     <img src={selectedDoc.id_front_image || '/placeholder-image.jpg'} alt="ID" className="w-full h-auto rounded-lg border object-cover" />
+                  </div>
+                  <div className="space-y-2">
+                     <p className="text-sm font-semibold">Selfie with ID</p>
+                     <p className="text-xs text-muted-foreground">Match face with ID document</p>
+                     <img src={selectedDoc.selfie_with_id || '/placeholder-image.jpg'} alt="Selfie" className="w-full h-auto rounded-lg border object-cover" />
+                  </div>
+                </div>
+
+                {selectedDoc.status === 'pending' && (
+                  <div className="space-y-4 pt-4 border-t">
+                    <p className="font-semibold text-sm">Action Requirement</p>
+                    <div className="flex flex-col gap-3">
+                      <Button onClick={onApprove} disabled={isActionLoading} className="w-full h-12 bg-green-600 hover:bg-green-700">
+                        {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Approve Verification</>}
+                      </Button>
+                      
+                      <div className="space-y-2 mt-4">
+                         <p className="text-xs font-semibold">Reject Document?</p>
+                         <Textarea placeholder="Indicate reason for rejection (e.g. Blurry photo, ID expired)" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
+                         <Button variant="destructive" className="w-full" onClick={onReject} disabled={isActionLoading || !rejectReason.trim()}>
+                            <XCircle className="w-4 h-4 mr-2" /> Reject & Request Resubmission
+                         </Button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {selectedDoc.status !== 'pending' && (
+                  <div className="pt-4 border-t">
+                    <Badge variant="outline" className={`${selectedDoc.status === 'approved' ? 'text-green-600 border-green-600' : 'text-red-600 border-red-600'} uppercase py-1 px-3`}>
+                      {selectedDoc.status}
+                    </Badge>
+                    {selectedDoc.rejection_reason && (
+                       <p className="mt-2 text-sm text-red-600 dark:text-red-400">Reason: {selectedDoc.rejection_reason}</p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

@@ -919,7 +919,7 @@ def verify_otp(request):
     POST body: { "code": "123456", "purpose": "verify_email", "email": "...(for pwd reset)" }
     """
     
-    code = request.data.get('code', '').strip()
+    code = (request.data.get('code') or request.data.get('otp') or '').strip()
     purpose = request.data.get('purpose', 'verify_email')
     
     if not code:

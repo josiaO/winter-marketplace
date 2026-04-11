@@ -11,10 +11,11 @@ import {
   Phone,
   Truck,
   CreditCard,
-  CheckCircle2,
-  XCircle,
   Star,
   ShieldCheck,
+  MessageSquare,
+  CheckCircle2,
+  XCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -580,12 +581,35 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
             {/* Seller Info */}
             <Card>
-              <CardHeader>
+              <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
                 <CardTitle className="text-base flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4" />
                   Seller
                 </CardTitle>
-              </CardHeader>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 text-xs text-primary hover:text-primary hover:bg-primary/5 rounded-lg"
+                  onClick={async () => {
+                    const sellerId = order.seller?.id;
+                    if (!sellerId) return;
+                    try {
+                      const conv = await api.communications.startConversation({
+                        seller_id: sellerId,
+                        order_id: order.id,
+                      });
+                      router.push(routes.messageThread(String(conv.id)));
+                    } catch {
+                      toast.error('Failed to start conversation');
+                    }
+                  }}
+                >
+                  <MessageSquare className="w-3.5 h-3.5 mr-1" />
+                  Message
+                </Button>
+              </div>
+            </CardHeader>
               <CardContent className="text-sm">
                 <div className="flex items-center gap-2">
                   <span className="font-medium">

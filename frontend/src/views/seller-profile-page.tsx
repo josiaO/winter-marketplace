@@ -9,9 +9,12 @@ import {
   Package,
   ShieldCheck,
   Star,
-  Store,
   Calendar,
   MapPin,
+  Flag,
+  MessageSquare,
+  Loader2,
+  CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -42,6 +45,10 @@ export function SellerProfilePage({ sellerId }: { sellerId: string }) {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [totalCount, setTotalCount] = useState(0);
+  const [showReportDialog, setShowReportDialog] = useState(false);
+  const [isReporting, setIsReporting] = useState(false);
+  const [reportReason, setReportReason] = useState('other');
+  const [reportText, setReportText] = useState('');
 
   // Fetch seller detail
   useEffect(() => {
@@ -84,6 +91,35 @@ export function SellerProfilePage({ sellerId }: { sellerId: string }) {
     (listing: Listing) => router.push(routes.product(String(listing.id))),
     [router]
   );
+
+  const handleMessageSeller = async () => {
+    if (!sellerId) return;
+    try {
+      const conv = await api.communications.startConversation({ seller_id: sellerId });
+      router.push(routes.conversation(String(conv.id)));
+    } catch {
+      toast.error('Failed to start conversation');
+    }
+  };
+
+  const submitReport = async () => {
+    if (!sellerId) return;
+    setIsReporting(true);
+    try {
+      await api.trust.createReport({
+        reported_user: parseInt(sellerId),
+        report_type: 'user',
+        reason: reportReason as any,
+        description: reportText,
+      });
+      toast.success('Report submitted');
+      setShowReportDialog(false);
+    } catch {
+      toast.error('Failed to submit report');
+    } finally {
+      setIsReporting(false);
+    }
+  };
 
   if (isLoading) {
     return (
@@ -195,7 +231,25 @@ export function SellerProfilePage({ sellerId }: { sellerId: string }) {
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 sm:ml-auto">
+                <div className="flex flex-wrap items-center gap-2 sm:ml-auto mt-4 sm:mt-0">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="rounded-lg h-9 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/10"
+                    onClick={() => setShowReportDialog(true)}
+                  >
+                    <Flag className="w-4 h-4 mr-1.5" />
+                    Report
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg h-9"
+                    onClick={handleMessageSeller}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-1.5" />
+                    Message
+                  </Button>
                   {storeSlugForLink && (
                     <Button
                       variant="outline"
@@ -306,6 +360,76 @@ export function SellerProfilePage({ sellerId }: { sellerId: string }) {
           </>
         )}
       </section>
+      
+      {/* Report Dialog */}
+      <Dialog open={showReportDialog} onOpenChange={setShowReportDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Flag className="w-5 h-5" />
+              Report Seller
+            </DialogTitle>
+            <DialogDescription>
+              Please tell us why you are reporting this seller. Our moderation team will investigate.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label htmlFor="report-reason">Reason</Label>
+              <select
+                id="report-reason"
+                className="w-full h-10 px-3 rounded-lg border bg-background text-sm focus:ring-2 focus:ring-primary/20 outline-none"
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value as any)}
+              >
+                <option value="fraud">Fraud / Scammer</option>
+                <option value="spam">Spam / Multiple Listings</option>
+                <option value="harassment">Harassment / Abusive</option>
+                <option value="misleading">Misleading / Wrong info</option>
+                <option value="inappropriate">Inappropriate content</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="report-text">Details</Label>
+              <Textarea
+                id="report-text"
+                placeholder="Provide more details about the issue..."
+                value={reportText}
+                onChange={(e) => setReportText(e.target.value)}
+                rows={4}
+                className="rounded-xl resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowReportDialog(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              className="rounded-lg"
+              onClick={submitReport}
+              disabled={isReporting || !reportText.trim()}
+            >
+              {isReporting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                  Submitting...
+                </>
+              ) : (
+                <>
+                  <Flag className="w-4 h-4 mr-2" />
+                  Submit Report
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

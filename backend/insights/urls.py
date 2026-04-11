@@ -4,7 +4,7 @@ from .views import (
     VisitorStatsAPIView, DashboardView, TrackEventView,
     admin_stats, user_growth, listing_growth, revenue_growth, order_growth, 
     listing_stats, public_stats, seller_stats_summary, seller_stats, buyer_stats,
-    SellerAnalyticsViewSet
+    SellerAnalyticsViewSet, PlatformMetricsAPIView
 )
 
 router = DefaultRouter()
@@ -17,6 +17,7 @@ urlpatterns = [
     
     # Admin stats
     path('admin-stats/', admin_stats, name='admin-stats'),
+    path('platform-metrics/', PlatformMetricsAPIView.as_view(), name='platform-metrics'),
     path('user-growth/', user_growth, name='user-growth'),
     path('listing-growth/', listing_growth, name='listing-growth'),
     path('revenue-growth/', revenue_growth, name='revenue-growth'),

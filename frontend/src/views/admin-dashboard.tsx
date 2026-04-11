@@ -213,13 +213,25 @@ export function AdminDashboardPage() {
             const display = card.format === 'currency' ? formatTZS(raw as number) : (raw as number).toLocaleString();
 
             return (
-              <motion.div key={card.key} variants={item}>
-                <Card className="border-0 shadow-md shadow-black/5 hover:shadow-lg transition-shadow">
+              <motion.div 
+                key={card.key} 
+                variants={item}
+                onClick={() => {
+                  if (card.key === 'total_escrow_balance') router.push(routes.adminPayouts());
+                  if (card.key === 'open_disputes') router.push(routes.adminDisputes());
+                  if (card.key === 'pending_verifications') router.push(routes.adminVerifications());
+                  if (card.key === 'total_users') router.push(routes.adminUsers());
+                  if (card.key === 'total_listings') router.push(routes.adminListings());
+                }}
+                className="cursor-pointer"
+              >
+                <Card className="border-0 shadow-md shadow-black/5 hover:shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]">
                   <CardContent className="p-4 sm:p-5">
                     <div className="flex items-center justify-between mb-3">
                       <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${card.bg}`}>
                         <card.icon className={`w-5 h-5 ${card.color}`} />
                       </div>
+                      <ArrowUpRight className="w-3.5 h-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                     {isLoading ? (
                       <Skeleton className="h-7 w-24 mb-1" />

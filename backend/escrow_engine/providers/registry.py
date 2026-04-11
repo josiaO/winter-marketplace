@@ -6,24 +6,10 @@ Extend this dict as new gateways are added.
 """
 from .selcom import SelcomProvider
 
-_SELCOM_CHANNELS = {
-    # ── Mobile Money (all TZ operators) ────────────────────────────────────
+from ..constants import SELCOM_CHANNEL_KEYS
+
+_SELCOM_CHANNELS = SELCOM_CHANNEL_KEYS | {
     'selcom',
-    'mpesa',
-    'tigo_pesa',
-    'airtel_money',
-    'halopesa',
-    'ezypesa',
-    'azampesa',
-    # ── Banks (40+ via Selcom bridge) ───────────────────────────────────────
-    'bank',
-    # ── Cards ───────────────────────────────────────────────────────────────
-    'card',
-    'card_visa',
-    'card_mastercard',
-    'card_unionpay',
-    # ── Selcom Pay (Till / TanQR / Masterpass QR) ───────────────────────────
-    'till',
     'tanqr',
     'mobile_money',   # generic fallback key
 }

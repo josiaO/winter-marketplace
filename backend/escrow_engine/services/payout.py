@@ -53,14 +53,19 @@ def create_payout(transaction: Transaction, *, payout_method: str = 'mpesa') -> 
             is_default=True,
         ).first()
 
+        payout_method_to_use = destination.method if destination else payout_method
+        payout_status = Payout.Status.PENDING if destination else Payout.Status.FAILED
+        failure_reason = "" if destination else "No payout destination found for seller. Map one in settings."
+
         payout, created = Payout.objects.get_or_create(
             transaction=txn,
             defaults={
                 'seller': txn.seller_user,
                 'amount': _calculate_payout_amount(txn),
                 'currency': txn.currency,
-                'payout_method': destination.method if destination else payout_method,
-                'status': Payout.Status.PENDING,
+                'payout_method': payout_method_to_use,
+                'status': payout_status,
+                'failure_reason': failure_reason,
             },
         )
 

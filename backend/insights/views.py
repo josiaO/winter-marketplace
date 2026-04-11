@@ -145,6 +145,16 @@ def admin_stats(request):
     return Response(legacy_stats)
 
 
+class PlatformMetricsAPIView(APIView):
+    """View for detailed platform metrics for the admin analytics dashboard."""
+    permission_classes = [IsAuthenticated, IsAdmin]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT}, tags=['insights'])
+    def get(self, request):
+        stats = AnalyticsService.get_platform_metrics()
+        return Response(stats)
+
+
 @extend_schema(responses={200: OpenApiTypes.OBJECT})
 @api_view(['GET'])
 @permission_classes([IsAuthenticated, IsAdmin])

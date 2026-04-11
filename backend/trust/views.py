@@ -4,7 +4,11 @@ from rest_framework.response import Response
 from django.db.models import Avg, Count, Q
 from django.utils import timezone
 from django.contrib.contenttypes.models import ContentType
-from rest_framework.exceptions import PermissionDenied
+import logging
+from rest_framework.exceptions import PermissionDenied, ValidationError
+
+logger = logging.getLogger(__name__)
+from commerce.services.uploads import validate_commerce_upload_file
 
 from .models import (
     UserVerification,
@@ -66,12 +70,20 @@ class UserVerificationViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(verification, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         
+        # Validate uploaded files
+        for field in ['national_id_front', 'national_id_back', 'tin_certificate', 'business_license_document']:
+            if field in request.FILES:
+                try:
+                    validate_commerce_upload_file(request.FILES[field])
+                except ValueError as exc:
+                    raise ValidationError({field: str(exc)})
+
         # Determine status automatically based on what was uploaded
-        if 'national_id_front' in request.data:
+        if 'national_id_front' in request.data or 'national_id_front' in request.FILES:
             verification.id_status = 'pending'
-        if 'tin_certificate' in request.data:
+        if 'tin_certificate' in request.data or 'tin_certificate' in request.FILES:
             verification.tin_status = 'pending'
-        if 'business_license_document' in request.data:
+        if 'business_license_document' in request.data or 'business_license_document' in request.FILES:
             verification.business_license_status = 'pending'
             
         serializer.save()
@@ -202,7 +214,11 @@ class ReviewViewSet(viewsets.ModelViewSet):
         is_approved=True,
         is_hidden=False
     ).select_related('buyer', 'seller', 'listing', 'order')
-    permission_classes = [permissions.IsAuthenticatedOrReadOnly]
+    permission_classes = [permissions.AllowAny]
+
+    def dispatch(self, request, *args, **kwargs):
+        logger.info(f"ReviewViewSet dispatch: {request.method} {request.path} user={request.user} authenticated={request.user.is_authenticated}")
+        return super().dispatch(request, *args, **kwargs)
 
     def get_serializer_class(self):
         if self.action == 'create':

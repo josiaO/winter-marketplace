@@ -138,7 +138,7 @@ urlpatterns = [
     path('.well-known/appspecific/com.chrome.devtools.json', chrome_devtools_handler, name='chrome-devtools'),
 ]
 
-if settings.DEBUG:
+if getattr(settings, 'ENABLE_SILK', False):
     urlpatterns.append(path('silk/', include('silk.urls', namespace='silk')))
 
 from django.views.static import serve

@@ -49,7 +49,7 @@ const listingSchema = z
     category: z.coerce.number().min(1, 'Select a category'),
     city: z.string().optional().default(''),
     address: z.string().optional().default(''),
-    listing_type: z.enum(['sale', 'rent', 'service'] as const, { required_error: 'Select a type' }),
+    listing_type: z.literal('sale').default('sale'),
     delivery_is_free: z.boolean(),
     delivery_fee: z.coerce.number().min(0).optional(),
   })
@@ -157,7 +157,7 @@ export function SellerListingCreatePage() {
       category: 0,
       city: '',
       address: '',
-      listing_type: 'sale',
+      listing_type: 'sale' as const,
       delivery_is_free: true,
       delivery_fee: 0,
     },
@@ -426,42 +426,20 @@ export function SellerListingCreatePage() {
                   )}
                 </div>
 
-                {/* Price & Type Row */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="price">Price (TZS) *</Label>
-                    <Input
-                      id="price"
-                      type="number"
-                      placeholder="0"
-                      min={1}
-                      {...form.register('price', { valueAsNumber: true })}
-                      className={form.formState.errors.price ? 'border-destructive' : ''}
-                    />
-                    {form.formState.errors.price && (
-                      <p className="text-xs text-destructive">{form.formState.errors.price.message}</p>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label>Type *</Label>
-                    <Select
-                      value={form.watch('listing_type')}
-                      onValueChange={(val) => form.setValue('listing_type', val as any)}
-                    >
-                      <SelectTrigger className="w-full">
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="sale">For Sale</SelectItem>
-                        <SelectItem value="rent">For Rent</SelectItem>
-                        <SelectItem value="service">Service</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {form.formState.errors.listing_type && (
-                      <p className="text-xs text-destructive">{form.formState.errors.listing_type.message}</p>
-                    )}
-                  </div>
+                {/* Price only — type is always 'sale', no selector needed */}
+                <div className="space-y-2">
+                  <Label htmlFor="price">Price (TZS) *</Label>
+                  <Input
+                    id="price"
+                    type="number"
+                    placeholder="0"
+                    min={1}
+                    {...form.register('price', { valueAsNumber: true })}
+                    className={form.formState.errors.price ? 'border-destructive' : ''}
+                  />
+                  {form.formState.errors.price && (
+                    <p className="text-xs text-destructive">{form.formState.errors.price.message}</p>
+                  )}
                 </div>
 
                 {/* Delivery: stored on listing; checkout prefers seller fees over platform grid when sum > 0 */}
