@@ -1,13 +1,12 @@
 'use client';
 
-import { use } from 'react';
 import { ConversationPageView } from '../../view-modules';
 
 export default function Page({
   params,
 }: {
-  params: Promise<{ conversationId: string }>;
+  params: { conversationId: string };
 }) {
-  const { conversationId } = use(params);
+  const { conversationId } = params;
   return <ConversationPageView conversationId={conversationId} />;
 }

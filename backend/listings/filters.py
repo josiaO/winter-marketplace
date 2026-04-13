@@ -25,6 +25,7 @@ class ListingFilter(filters.FilterSet):
             'status': ['exact'],
             'listing_type': ['exact'],
             'condition': ['exact'],
+            'is_published': ['exact'],
             'city': ['icontains'],
         }
 

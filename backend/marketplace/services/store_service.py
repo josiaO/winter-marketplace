@@ -79,8 +79,13 @@ def sync_store_from_seller_profile(seller: SellerProfile) -> None:
     if seller.store_description is not None:
         store.description = seller.store_description
 
+    if seller.store_logo:
+        store.logo = seller.store_logo
+    if seller.store_banner:
+        store.banner = seller.store_banner
+
     store.is_active = seller.verification_status == 'verified' and seller.is_active
-    store.save(update_fields=['name', 'description', 'is_active', 'updated_at'])
+    store.save(update_fields=['name', 'description', 'logo', 'banner', 'is_active', 'updated_at'])
 
 
 def update_store_statistics(store: Store) -> Store:

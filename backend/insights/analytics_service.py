@@ -148,6 +148,21 @@ class AnalyticsService:
             disputed=Sum('amount', filter=Q(status=_TS.DISPUTED))
         )
         
+        from marketplace.constants import VerificationStatus
+        
+        pending_verifications = SellerProfile.objects.filter(
+            verification_status__in=[VerificationStatus.PENDING_ID, VerificationStatus.UNDER_REVIEW]
+        ).count()
+        
+        from escrow_engine.models import Dispute as EngDispute
+        open_disputes = EngDispute.objects.filter(status__in=['open', 'under_review']).count()
+        
+        from commerce.serializers import OrderSerializer
+        from accounts.serializers import UserSerializer
+        
+        recent_users = User.objects.order_by('-date_joined')[:10]
+        recent_orders = Order.objects.order_by('-created_at')[:10]
+        
         return {
             'total_users': user_stats['total'],
             'active_users': user_stats['active'],
@@ -162,6 +177,11 @@ class AnalyticsService:
             'cancelled_orders': order_stats['cancelled'] or 0,
             'total_revenue': float(order_stats['revenue'] or 0),
             'platform_fees': float(order_stats['fees'] or 0),
+            'total_escrow_balance': float(escrow_totals['held'] or 0),
+            'open_disputes': open_disputes,
+            'pending_verifications': pending_verifications,
+            'recent_users': UserSerializer(recent_users, many=True).data,
+            'recent_orders': OrderSerializer(recent_orders, many=True).data,
             'escrow': {
                 'held': float(escrow_totals['held'] or 0),
                 'released': float(escrow_totals['released'] or 0),
@@ -204,7 +224,7 @@ class AnalyticsService:
         )['avg'] or 0
         
         # 6. Top Categories
-        from marketplace.models import Category
+        from catalog.models import Category
         top_categories = Listing.objects.values('category__name').annotate(
             count=Count('id')
         ).order_by('-count')[:10]
@@ -662,12 +682,43 @@ class SellerAnalyticsService:
         pending_payouts = Payout.objects.filter(seller=self.seller, status='pending').aggregate(Sum('amount'))['amount__sum'] or 0
         completed_payouts = Payout.objects.filter(seller=self.seller, status='completed').aggregate(Sum('amount'))['amount__sum'] or 0
         
-        # Formatting for response
+        # 30-day revenue chart data
+        thirty_days_ago = timezone.now() - timedelta(days=30)
+        revenue_by_day = seller_orders.filter(
+            status__in=['completed', 'delivered'],
+            created_at__gte=thirty_days_ago
+        ).annotate(
+            day=TruncDate('created_at')
+        ).values('day').annotate(
+            revenue=Sum('total_amount')
+        ).order_by('day')
+
+        revenue_chart = [
+            {'date': item['day'].isoformat() if item['day'] else '', 'revenue': float(item['revenue'] or 0)}
+            for item in revenue_by_day
+            if item['day']
+        ]
+
+        # Get ratings from SellerProfile
+        seller_profile = getattr(self.seller, 'seller_profile', None)
+
+        # Formatting for response - Flat format for dashboard
         return {
-            **overview,
+            'total_listings': overview['total_listings'],
+            'active_listings': overview['active_listings'],
+            'inactive_listings': overview['inactive_listings'],
+            'total_views': overview['total_views'],
+            'total_sales': float(total_revenue),
             'earnings_today': float(revenue_today),
             'earnings_this_month': float(revenue_month),
             'total_earnings': float(total_revenue),
+            'total_orders': seller_orders.count(),
+            'escrow_balance': float(escrow_held),
+            'pending_payouts': float(pending_payouts),
+            'completed_payouts': float(completed_payouts),
+            'avg_rating': float(seller_profile.average_rating) if seller_profile else 0.0,
+            'total_reviews': seller_profile.total_reviews if seller_profile else 0,
+            'revenue_chart': revenue_chart,
             'escrow': {
                 'held': float(escrow_held),
                 'released': float(escrow_released),

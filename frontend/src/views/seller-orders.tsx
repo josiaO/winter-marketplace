@@ -1,6 +1,6 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { routes } from '@/lib/routes';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -17,6 +17,9 @@ import {
   ChevronDown,
   ChevronUp,
   ShieldAlert,
+  Send,
+  ImageOff,
+  AlertTriangle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -64,6 +67,7 @@ const STATUS_TABS = [
   { value: 'arrived', label: 'Arrived', icon: MapPin },
   { value: 'delivered', label: 'Delivered', icon: CheckCircle2 },
   { value: 'cancelled', label: 'Cancelled', icon: XCircle },
+  { value: 'disputed', label: 'Disputed', icon: AlertTriangle },
 ];
 
 export function SellerOrdersPage() {
@@ -101,19 +105,20 @@ export function SellerOrdersPage() {
     }
   }, []);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      router.push(routes.login());
-      return;
-    }
-    if (!canAccessSellerPortal(user)) {
-      toast.error('You must be a seller to view orders.');
-      router.push(routes.sellerRegister());
-      return;
-    }
+  const searchParams = useSearchParams();
+  const statusParam = searchParams.get('status');
 
-    void loadOrders();
-  }, [isAuthenticated, user, navigate, loadOrders]);
+  useEffect(() => {
+    if (statusParam && STATUS_TABS.some(t => t.value === statusParam)) {
+      setActiveTab(statusParam);
+    }
+  }, [statusParam]);
+
+  useEffect(() => {
+    if (isAuthenticated && user && canAccessSellerPortal(user)) {
+      void loadOrders();
+    }
+  }, [isAuthenticated, user, loadOrders]);
 
   const filteredOrders = useMemo(() => {
     if (activeTab === 'all') return orders;
@@ -205,8 +210,7 @@ export function SellerOrdersPage() {
   if (!isAuthenticated || !user) return null;
 
   return (
-    <div className="min-h-[80vh] px-4 py-8">
-      <div className="max-w-5xl mx-auto space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -738,7 +742,6 @@ export function SellerOrdersPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
     </div>
   );
 }

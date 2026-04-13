@@ -242,6 +242,14 @@ def _post_refund_handler(transaction: Transaction) -> None:
         _sync_order_cancelled(transaction)
         logger.info("Marketplace buyer notified of refund for order %s", transaction.linked_order_id)
 
+def _post_dispute_handler(transaction: Transaction) -> None:
+    """
+    Branch logic after a successful dispute open.
+    """
+    if transaction.source == TransactionSource.MARKETPLACE:
+        _sync_order_disputed(transaction)
+        logger.info("Marketplace source notified of dispute for order %s", transaction.linked_order_id)
+
 # ── Sync Helpers (Marketplace Specific) ────────────────────────────────────────
 # Source of Truth: commerce owns Order row updates via integrations.commerce_sync;
 # escrow_engine only triggers them after financial transitions.
@@ -263,6 +271,12 @@ def _sync_order_cancelled(transaction: Transaction) -> None:
     from escrow_engine.integrations.commerce_sync import sync_marketplace_order_on_escrow_refund
 
     sync_marketplace_order_on_escrow_refund(transaction)
+
+
+def _sync_order_disputed(transaction: Transaction) -> None:
+    from escrow_engine.integrations.commerce_sync import sync_marketplace_order_on_escrow_dispute
+
+    sync_marketplace_order_on_escrow_dispute(transaction)
 
 
 # ── Dispute Handling ─────────────────────────────────────────────────────────
@@ -326,6 +340,7 @@ def open_dispute(
         dispute.save(update_fields=['evidence_images_count'])
 
     _notify_dispute_opened(transaction, dispute)
+    _post_dispute_handler(transaction)
     logger.info("Dispute opened for transaction %s", transaction.reference)
     return dispute
 

@@ -554,8 +554,9 @@ export interface Verification {
 export interface ConversationParticipant {
   id: number;
   username: string;
-  first_name: string;
-  last_name: string;
+  first_name?: string;
+  last_name?: string;
+  full_name?: string;
   avatar: string | null;
 }
 

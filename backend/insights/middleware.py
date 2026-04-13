@@ -21,20 +21,21 @@ class VisitorTrackingMiddleware:
         user_agent = request.META.get("HTTP_USER_AGENT", "")
 
         # 2. Dispatch to Celery task for async persistence
-        # Wrap in try-except to ensure tracking failures don't crash the request/response cycle.
-        try:
-            track_visitor_event_task.delay(
-                session_key=session_key,
-                ip_address=ip_address,
-                user_agent=user_agent,
-                path=path,
-                method=request.method,
-                event_type='page_view' if should_track else None,
-                metadata={'path': path, 'method': request.method} if should_track else {}
-            )
-        except Exception:
-            # Silently fail analytics capture to maintain site availability
-            pass
+        # Only track if we have a valid session key to avoid IntegrityErrors in workers.
+        if session_key:
+            try:
+                track_visitor_event_task.delay(
+                    session_key=session_key,
+                    ip_address=ip_address,
+                    user_agent=user_agent,
+                    path=path,
+                    method=request.method,
+                    event_type='page_view' if should_track else None,
+                    metadata={'path': path, 'method': request.method} if should_track else {}
+                )
+            except Exception:
+                # Silently fail analytics capture to maintain site availability
+                pass
 
         return self.get_response(request)
 

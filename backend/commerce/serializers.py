@@ -104,6 +104,7 @@ class OrderSerializer(serializers.ModelSerializer):
         read_only=True
     )
     escrow = serializers.SerializerMethodField()
+    dispute = serializers.SerializerMethodField()
     buyer_details = serializers.SerializerMethodField()
     buyer_location = serializers.SerializerMethodField()
     seller_details = serializers.SerializerMethodField()
@@ -131,7 +132,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'subtotal', 'shipping_cost', 'platform_fee', 'total_amount', 'currency',
             'shipping_address', 'shipping_method', 'tracking_number', 'arrival_location',
             'buyer_notes', 'seller_notes',
-            'seller_payout_amount', 'escrow',
+            'seller_payout_amount', 'escrow', 'dispute',
             'buyer_details', 'buyer_location', 'seller_details',
             'confirmed_at', 'processing_at', 'shipped_at',
             'delivered_at', 'arrived_at', 'completed_at', 'cancelled_at',
@@ -299,6 +300,27 @@ class OrderSerializer(serializers.ModelSerializer):
                 ),
             }
         return None
+    
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_dispute(self, obj):
+        """Get the linked engine dispute details."""
+        dispute = getattr(obj, 'engine_dispute', None)
+        if not dispute and hasattr(obj, 'engine_transaction'):
+            dispute = getattr(obj.engine_transaction, 'dispute', None)
+        
+        if not dispute:
+            return None
+            
+        return {
+            'id': dispute.id,
+            'status': dispute.status,
+            'reason': dispute.reason,
+            'evidence_images': [e.file.url for e in dispute.evidence.filter(media_type='image')],
+            'evidence_video': dispute.evidence_video.url if dispute.evidence_video else None,
+            'resolution': dispute.resolution,
+            'admin_notes': dispute.reason, # Using reason as info
+            'created_at': dispute.created_at,
+        }
 
 
 # Note: EscrowTransactionSerializer and PayoutSerializer have been removed 

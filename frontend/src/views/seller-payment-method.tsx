@@ -182,8 +182,7 @@ export function SellerPaymentMethodPage() {
   const isConfigured = !!currentMethod;
 
   return (
-    <div className="min-h-[80vh] px-4 py-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -535,7 +534,6 @@ export function SellerPaymentMethodPage() {
             </AlertDescription>
           </Alert>
         </motion.div>
-      </div>
     </div>
   );
 }

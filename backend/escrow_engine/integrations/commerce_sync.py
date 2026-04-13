@@ -16,4 +16,5 @@ __all__ = [
     'sync_marketplace_order_on_escrow_hold',
     'sync_marketplace_order_on_escrow_release',
     'sync_marketplace_order_on_escrow_refund',
+    'sync_marketplace_order_on_escrow_dispute',
 ]

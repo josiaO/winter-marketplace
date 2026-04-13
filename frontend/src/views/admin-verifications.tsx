@@ -17,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { getRelativeTime } from '@/lib/helpers';
@@ -33,16 +34,20 @@ export function AdminVerificationsPage() {
   const [activeTab, setActiveTab] = useState('pending'); // pending, approved, rejected
   const [page, setPage] = useState(1);
 
-  // Review Dialog State
+  const [selectedDetail, setSelectedDetail] = useState<any | null>(null);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [selectedDoc, setSelectedDoc] = useState<any | null>(null);
-  const [rejectReason, setRejectReason] = useState('');
   const [isActionLoading, setIsActionLoading] = useState(false);
+  const [rejectReason, setRejectReason] = useState('');
 
   const fetchVerifications = useCallback(async () => {
     setIsLoading(true);
     try {
-      const params: any = { page, page_size: PAGE_SIZE, status: activeTab };
-      const res = await api.sellers.adminVerifications(params);
+      const res = await api.sellers.adminVerifications({
+        status: activeTab,
+        page: page,
+        page_size: PAGE_SIZE
+      });
       setVerifications(res.results || []);
       setTotalCount(res.count || 0);
     } catch {
@@ -53,12 +58,23 @@ export function AdminVerificationsPage() {
   }, [activeTab, page]);
 
   useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'admin') {
-      router.push(routes.home());
-      return;
+    if (isAuthenticated && user?.role === 'admin') {
+      fetchVerifications();
     }
-    fetchVerifications();
-  }, [isAuthenticated, user, router, fetchVerifications]);
+  }, [isAuthenticated, user, fetchVerifications]);
+
+  const handleReview = async (verification: any) => {
+    setSelectedDoc(verification);
+    setIsDetailLoading(true);
+    try {
+      const detail = await api.sellers.adminSellerDetail(verification.id);
+      setSelectedDetail(detail);
+    } catch {
+      toast.error('Failed to load seller details.');
+    } finally {
+      setIsDetailLoading(false);
+    }
+  };
 
   const onApprove = async () => {
     if (!selectedDoc) return;
@@ -67,6 +83,7 @@ export function AdminVerificationsPage() {
       await api.sellers.adminVerifyApprove(selectedDoc.id);
       toast.success('Seller approved successfully.');
       setSelectedDoc(null);
+      setSelectedDetail(null);
       fetchVerifications();
     } catch (err: any) {
       toast.error(err.message || 'Failed to approve seller.');
@@ -83,6 +100,7 @@ export function AdminVerificationsPage() {
       await api.sellers.adminVerifyReject(selectedDoc.id, { reason: rejectReason });
       toast.success('Seller rejected.');
       setSelectedDoc(null);
+      setSelectedDetail(null);
       setRejectReason('');
       fetchVerifications();
     } catch (err: any) {
@@ -145,19 +163,19 @@ export function AdminVerificationsPage() {
                         <div className="flex items-center gap-4">
                           <Avatar className="h-12 w-12"><AvatarFallback><User className="w-5 h-5" /></AvatarFallback></Avatar>
                           <div>
-                            <p className="font-semibold text-sm">Seller ID: #{v.seller}</p>
+                            <p className="font-semibold text-sm">Seller ID: #{v.id}</p>
                             <div className="flex items-center gap-2 mt-1">
-                              <Badge variant="outline" className="text-[10px]">{v.id_type}</Badge>
-                              <span className="text-xs text-muted-foreground">{v.id_number}</span>
+                              <Badge variant="outline" className="text-[10px]">{v.id_type || 'Identity'}</Badge>
+                              <span className="text-xs text-muted-foreground">{v.user?.email}</span>
                             </div>
                           </div>
                         </div>
                         <div className="flex items-center justify-between sm:justify-end gap-6 w-full sm:w-auto">
                           <div className="text-right">
                             <p className="text-xs text-muted-foreground font-medium">Submitted</p>
-                            <p className="text-xs">{getRelativeTime(v.submitted_at)}</p>
+                            <p className="text-xs">{v.identity_submitted_at ? getRelativeTime(v.identity_submitted_at) : 'N/A'}</p>
                           </div>
-                          <Button size="sm" onClick={() => setSelectedDoc(v)} className="gap-1.5">
+                          <Button size="sm" onClick={() => handleReview(v)} className="gap-1.5">
                             <Eye className="w-4 h-4" /> Review
                           </Button>
                         </div>
@@ -181,56 +199,111 @@ export function AdminVerificationsPage() {
         </Card>
 
         {/* Review Dialog */}
-        <Dialog open={!!selectedDoc} onOpenChange={(open) => { if(!open) setSelectedDoc(null); }}>
+        <Dialog open={!!selectedDoc} onOpenChange={(open) => { if(!open) { setSelectedDoc(null); setSelectedDetail(null); } }}>
           <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Review Document #{selectedDoc?.id}</DialogTitle>
+              <DialogTitle>Review Seller #{selectedDoc?.id}</DialogTitle>
             </DialogHeader>
-            {selectedDoc && (
+            {isDetailLoading ? (
+               <div className="py-20 flex flex-col items-center justify-center space-y-4">
+                 <Loader2 className="w-10 h-10 animate-spin text-primary" />
+                 <p className="text-sm text-muted-foreground">Loading seller documents...</p>
+               </div>
+            ) : selectedDetail ? (
               <div className="space-y-6 pt-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div className="space-y-2">
                      <p className="text-sm font-semibold">National ID / Document</p>
-                     <p className="text-xs text-muted-foreground">{selectedDoc.id_type} - {selectedDoc.id_number}</p>
-                     <img src={selectedDoc.id_front_image || '/placeholder-image.jpg'} alt="ID" className="w-full h-auto rounded-lg border object-cover" />
+                     <p className="text-xs text-muted-foreground">
+                        {selectedDetail.identity_verification?.id_type} - {selectedDetail.identity_verification?.id_number}
+                     </p>
+                     <div className="aspect-video relative rounded-lg border overflow-hidden bg-muted">
+                        {selectedDetail.identity_verification?.id_front_image ? (
+                           <img src={selectedDetail.identity_verification.id_front_image} alt="ID" className="absolute inset-0 w-full h-full object-contain" />
+                        ) : (
+                           <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">No image provided</div>
+                        )}
+                     </div>
                   </div>
                   <div className="space-y-2">
                      <p className="text-sm font-semibold">Selfie with ID</p>
-                     <p className="text-xs text-muted-foreground">Match face with ID document</p>
-                     <img src={selectedDoc.selfie_with_id || '/placeholder-image.jpg'} alt="Selfie" className="w-full h-auto rounded-lg border object-cover" />
+                     <p className="text-xs text-muted-foreground">Verification photo</p>
+                     <div className="aspect-video relative rounded-lg border overflow-hidden bg-muted">
+                        {selectedDetail.identity_verification?.selfie_with_id ? (
+                           <img src={selectedDetail.identity_verification.selfie_with_id} alt="Selfie" className="absolute inset-0 w-full h-full object-contain" />
+                        ) : (
+                           <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs">No selfie provided</div>
+                        )}
+                     </div>
                   </div>
                 </div>
 
-                {selectedDoc.status === 'pending' && (
+                <div className="bg-muted/30 p-4 rounded-lg space-y-2">
+                   <p className="text-sm font-semibold">Store Information</p>
+                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                      <span className="text-muted-foreground">Store Name:</span>
+                      <span className="font-medium">{selectedDetail.store_name}</span>
+                      <span className="text-muted-foreground">Location:</span>
+                      <span className="font-medium">{selectedDetail.store_location}</span>
+                      <span className="text-muted-foreground">Seller:</span>
+                      <span className="font-medium">{selectedDetail.user?.username} ({selectedDetail.user?.email})</span>
+                   </div>
+                </div>
+
+                {selectedDetail.verification_status === 'under_review' && (
                   <div className="space-y-4 pt-4 border-t">
-                    <p className="font-semibold text-sm">Action Requirement</p>
-                    <div className="flex flex-col gap-3">
-                      <Button onClick={onApprove} disabled={isActionLoading} className="w-full h-12 bg-green-600 hover:bg-green-700">
-                        {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Approve Verification</>}
+                    <p className="font-semibold text-sm">Review Decision</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <Button onClick={onApprove} disabled={isActionLoading} className="bg-green-600 hover:bg-green-700 h-11">
+                        {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <><CheckCircle2 className="w-4 h-4 mr-2" /> Approve Seller</>}
                       </Button>
                       
-                      <div className="space-y-2 mt-4">
-                         <p className="text-xs font-semibold">Reject Document?</p>
-                         <Textarea placeholder="Indicate reason for rejection (e.g. Blurry photo, ID expired)" value={rejectReason} onChange={e => setRejectReason(e.target.value)} />
-                         <Button variant="destructive" className="w-full" onClick={onReject} disabled={isActionLoading || !rejectReason.trim()}>
-                            <XCircle className="w-4 h-4 mr-2" /> Reject & Request Resubmission
-                         </Button>
-                      </div>
+                      <Dialog>
+                         <Tabs defaultValue="approve" className="w-full">
+                            <Button variant="outline" className="w-full h-11 text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={() => {}}>
+                               <XCircle className="w-4 h-4 mr-2" /> Reject Submission
+                            </Button>
+                         </Tabs>
+                      </Dialog>
+                    </div>
+
+                    <div className="bg-red-50 dark:bg-red-900/10 p-4 rounded-xl border border-red-100 dark:border-red-900/30 space-y-3">
+                        <Label className="text-xs font-bold text-red-800 dark:text-red-400 uppercase">Rejection Reason</Label>
+                        <Textarea 
+                          placeholder="e.g. ID is expired, Photo is blurry, Please retake selfie..." 
+                          value={rejectReason} 
+                          onChange={e => setRejectReason(e.target.value)}
+                          className="bg-white dark:bg-black/20"
+                        />
+                        <Button 
+                          variant="destructive" 
+                          className="w-full h-11" 
+                          onClick={onReject} 
+                          disabled={isActionLoading || !rejectReason.trim()}
+                        >
+                          <XCircle className="w-4 h-4 mr-2" /> Confirm Rejection
+                        </Button>
                     </div>
                   </div>
                 )}
-                {selectedDoc.status !== 'pending' && (
-                  <div className="pt-4 border-t">
-                    <Badge variant="outline" className={`${selectedDoc.status === 'approved' ? 'text-green-600 border-green-600' : 'text-red-600 border-red-600'} uppercase py-1 px-3`}>
-                      {selectedDoc.status}
-                    </Badge>
-                    {selectedDoc.rejection_reason && (
-                       <p className="mt-2 text-sm text-red-600 dark:text-red-400">Reason: {selectedDoc.rejection_reason}</p>
+                
+                {selectedDetail.verification_status !== 'under_review' && (
+                  <div className="pt-4 border-t flex items-center justify-between">
+                    <div>
+                        <p className="text-xs text-muted-foreground font-medium uppercase mb-1">Current Status</p>
+                        <Badge variant="outline" className={`${selectedDetail.verification_status === 'verified' ? 'text-green-600 border-green-600 bg-green-50' : 'text-red-600 border-red-600 bg-red-50'} uppercase py-1 px-3`}>
+                            {selectedDetail.verification_status}
+                        </Badge>
+                    </div>
+                    {selectedDetail.identity_verification?.rejection_reason && (
+                       <div className="text-right">
+                          <p className="text-xs text-red-600 font-semibold italic">"{selectedDetail.identity_verification.rejection_reason}"</p>
+                       </div>
                     )}
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </DialogContent>
         </Dialog>
       </div>

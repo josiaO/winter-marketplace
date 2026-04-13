@@ -135,8 +135,7 @@ export function SellerListingsPage() {
   if (!isAuthenticated || !user) return null;
 
   return (
-    <div className="min-h-[80vh] px-4 py-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -441,7 +440,6 @@ export function SellerListingsPage() {
             </AnimatePresence>
           </div>
         )}
-      </div>
     </div>
   );
 }

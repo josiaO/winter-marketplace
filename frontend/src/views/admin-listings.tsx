@@ -54,6 +54,7 @@ const PAGE_SIZE = 20;
 
 function statusBadgeClass(status: string) {
   switch (status) {
+    case 'active':
     case 'published':
       return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
     case 'draft':
@@ -89,7 +90,9 @@ export function AdminListingsPage() {
     try {
       const params: Record<string, string | number> = { page, limit: PAGE_SIZE };
       if (search) params.search = search;
-      if (statusFilter !== 'all') params.status = statusFilter;
+      if (statusFilter !== 'all') {
+        params.status = statusFilter === 'published' ? 'active' : statusFilter;
+      }
 
       const res: PaginatedResponse<Listing> = await api.listings.list(params);
       setListings(res.results);

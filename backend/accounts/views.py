@@ -792,39 +792,43 @@ def delete_account(request):
 @permission_classes([IsAuthenticated])
 def upgrade_to_seller(request):
     """Upgrade a regular user to a seller and return fresh JWTs (role in token must match DB for dashboard middleware)."""
-    user = request.user
-    already = is_seller(user)
+    try:
+        user = request.user
+        already = is_seller(user)
 
-    if not already:
-        _, message = AccountService.toggle_seller_role(user)
-    else:
-        message = 'User is already a seller'
+        if not already:
+            _, message = AccountService.toggle_seller_role(user)
+        else:
+            message = 'User is already a seller'
 
-    user.refresh_from_db()
-    seller_profile = getattr(user, 'seller_profile', None)
+        user.refresh_from_db()
+        seller_profile = getattr(user, 'seller_profile', None)
 
-    refresh = RefreshToken.for_user(user)
-    refresh['role'] = get_user_role(user)
-    access_token = str(refresh.access_token)
-    refresh_token = str(refresh)
+        refresh = RefreshToken.for_user(user)
+        refresh['role'] = get_user_role(user)
+        access_token = str(refresh.access_token)
+        refresh_token = str(refresh)
 
-    return Response({
-        'message': message,
-        'seller_profile_id': seller_profile.id if seller_profile else None,
-        'already_seller': already,
-        'access': access_token,
-        'refresh': refresh_token,
-        'user': {
-            'id': user.id,
-            'username': user.username,
-            'email': user.email,
-            'first_name': user.first_name or '',
-            'last_name': user.last_name or '',
-            'is_active': user.is_active,
-            'role': get_user_role(user),
-            'seller_profile': {'id': seller_profile.id} if seller_profile else None,
-        },
-    })
+        return Response({
+            'message': message,
+            'seller_profile_id': seller_profile.id if seller_profile else None,
+            'already_seller': already,
+            'access': access_token,
+            'refresh': refresh_token,
+            'user': {
+                'id': user.id,
+                'username': user.username,
+                'email': user.email,
+                'first_name': user.first_name or '',
+                'last_name': user.last_name or '',
+                'is_active': user.is_active,
+                'role': get_user_role(user),
+                'seller_profile': {'id': seller_profile.id} if seller_profile else None,
+            },
+        })
+    except Exception as e:
+        logger.exception("Error in upgrade_to_seller")
+        return Response({'success': False, 'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 # ────────────────────────────────────────────────

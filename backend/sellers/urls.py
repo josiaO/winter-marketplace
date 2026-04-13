@@ -25,6 +25,7 @@ urlpatterns = [
 
 # Mounted at /api/admin/sellers/ via root URLconf (namespace sellers_admin).
 admin_urlpatterns = [
+    path('', views.AdminVerificationQueueListView.as_view(), name='verification-queue-root'),
     path(
         'verification-media/<str:token>/',
         views.AdminVerificationMediaView.as_view(),

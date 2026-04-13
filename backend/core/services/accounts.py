@@ -47,8 +47,8 @@ class AccountService:
             last_name=validated_data.get('last_name', '')
         )
 
-        # User remains inactive until OTP verification
-        user.is_active = False
+        # User remains inactive until OTP verification, unless in DEBUG mode
+        user.is_active = getattr(settings, 'DEBUG', False)
         user.save()
 
         # Profile is usually created by signal. Ensure it exists and update phone.
@@ -224,15 +224,23 @@ class AccountService:
 
         if user.groups.filter(name='seller').exists():
             # If they already have the group, make sure they have a SellerProfile
-            SellerProfile.objects.get_or_create(user=user)
+            profile, _ = SellerProfile.objects.get_or_create(user=user)
             message = f"{user.username} is already a seller"
             is_now_seller = True
         else:
             user.groups.add(seller_group)
             Profile.objects.get_or_create(user=user)
-            SellerProfile.objects.get_or_create(user=user)
+            profile, _ = SellerProfile.objects.get_or_create(user=user)
             message = f"{user.username} is now a seller"
             is_now_seller = True
+
+        # Auto-verify in DEBUG mode to allow immediate listing/checkout in simulation
+        if getattr(settings, 'DEBUG', False) and is_now_seller:
+            try:
+                from marketplace.services.seller_service import SellerService
+                SellerService.verify_by_admin(profile)
+            except Exception as e:
+                logger.warning(f"Failed to auto-verify seller {user.username}: {e}")
 
         return is_now_seller, message
 

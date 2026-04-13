@@ -20,7 +20,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/smartdalali/empty-state';
@@ -31,7 +31,17 @@ import { toast } from 'sonner';
 import type { Message, ConversationParticipant, Listing, Order } from '@/types/api';
 import { cn } from '@/lib/utils';
 
-// ── Conversation Page ───────────────────────────────────────────────────────
+// ── Constants ───────────────────────────────────────────────────────────────
+
+const QUICK_REPLIES = [
+  'Is this still available?',
+  'What is your best price?',
+  'Where are you located?',
+  'Can I see more photos?',
+  'Is the price negotiable?',
+  'I am interested in this.',
+  'When can I come to see it?',
+];
 
 export function ConversationPage({ conversationId }: { conversationId: string }) {
   const router = useRouter();
@@ -50,48 +60,70 @@ export function ConversationPage({ conversationId }: { conversationId: string })
   const socketRef = useRef<WebSocket | null>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((instant = false) => {
+    // Small delay to let the DOM update
     setTimeout(() => {
-      if (scrollAreaRef.current) {
-        const viewport = scrollAreaRef.current.querySelector('[data-radix-scroll-area-viewport]');
-        if (viewport) {
-          viewport.scrollTop = viewport.scrollHeight;
-        }
-      }
-    }, 50);
+      messagesEndRef.current?.scrollIntoView({
+        behavior: instant ? 'auto' : 'smooth',
+        block: 'end',
+      });
+    }, 100);
   }, []);
 
   const fetchConversation = useCallback(async () => {
     if (!isAuthenticated || !conversationId) return;
     setIsLoading(true);
     try {
-      // Fetch messages
-      const msgRes = await api.communications.messages(conversationId, {
-        page: 1,
-        page_size: 100,
-      });
-      setMessages(msgRes?.results || []);
+      // Parallel fetch messages and conversation details
+      const [msgRes, conv] = await Promise.all([
+        api.communications.messages(conversationId, {
+          page: 1,
+          page_size: 100,
+        }),
+        api.communications.conversationDetail(conversationId),
+      ]);
 
-      // Fetch conversation details
-      const convRes = await api.communications.conversations();
-      const conv = convRes.results?.find((c) => String(c.id) === String(conversationId));
+      setMessages(msgRes?.results || (msgRes as any) || []);
+      
       if (conv) {
-        setParticipants(conv.participants || []);
         setListing((conv.listing as Listing) || null);
         setOrder((conv.order as Order) || null);
+        
+        // Populate participants using the API data
+        const parts: ConversationParticipant[] = [];
+        if (user) {
+          parts.push({
+            id: user.id,
+            username: user.username,
+            first_name: user.first_name,
+            last_name: user.last_name,
+            avatar: user.avatar
+          });
+        }
+        
+        if (conv.other_participant) {
+          parts.push(conv.other_participant);
+        } else if (conv.seller && typeof conv.seller === 'object') {
+          parts.push(conv.seller as any);
+        } else if (conv.user && typeof conv.user === 'object') {
+          parts.push(conv.user as any);
+        }
+        
+        setParticipants(parts);
       }
 
       // Mark as read
-      await api.communications.markRead(conversationId).catch(() => {});
-    } catch {
-      toast.error('Failed to load conversation');
+      api.communications.markRead(conversationId).catch(() => {});
+    } catch (err) {
+      console.error('Failed to load conversation:', err);
+      toast.error('Failed to load conversation details');
     } finally {
       setIsLoading(false);
+      scrollToBottom(true);
     }
-  }, [isAuthenticated, conversationId]);
+  }, [isAuthenticated, conversationId, scrollToBottom]);
 
   useEffect(() => {
     fetchConversation();
@@ -99,12 +131,28 @@ export function ConversationPage({ conversationId }: { conversationId: string })
     // Connect to WebSocket for real-time updates
     if (isAuthenticated && conversationId) {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const host = window.location.host;
-      // Use token for auth — the JWTAuthMiddleware in backend handles this
-      const token = useAuthStore.getState().token;
-      const wsUrl = `${protocol}//${host}/ws/chat/${conversationId}/?token=${token}`;
+      // Determine WebSocket host. In dev, Django is usually on 8000, while Next.js is on 3000.
+      let host = window.location.host;
+      if (host.includes('localhost:3000')) {
+        host = 'localhost:8000';
+      } else if (host.includes('127.0.0.1:3000')) {
+        host = '127.0.0.1:8000';
+      }
+
+      // Use accessToken for auth
+      const accessToken = useAuthStore.getState().accessToken;
       
-      const socket = new WebSocket(wsUrl);
+      // Preferred: Use Sec-WebSocket-Protocol (avoids tokens in query string)
+      // Middleware expects: sd-jwt, <base64url(token)>
+      const wsUrl = `${protocol}//${host}/ws/chat/${conversationId}/`;
+      
+      // Helper for base64url encoding
+      const b64url = (str: string) => btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      const socket = accessToken 
+        ? new WebSocket(wsUrl, ['sd-jwt', b64url(accessToken)])
+        : new WebSocket(wsUrl);
+
       socketRef.current = socket;
 
       socket.onopen = () => {
@@ -184,6 +232,7 @@ export function ConversationPage({ conversationId }: { conversationId: string })
         if (prev.some(m => m.id === sent.id)) return prev;
         return [...prev, sent];
       });
+      scrollToBottom();
       toast.success('Message sent');
     } catch {
       toast.error('Failed to send message');
@@ -191,6 +240,10 @@ export function ConversationPage({ conversationId }: { conversationId: string })
     } finally {
       setSendingMessage(false);
     }
+  };
+
+  const handleQuickReply = (text: string) => {
+    setNewMessage(text);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -207,8 +260,6 @@ export function ConversationPage({ conversationId }: { conversationId: string })
     }
   };
 
-  const otherParticipant =
-    participants.find((p) => p.id !== user?.id) || participants[0];
 
   if (!isAuthenticated) {
     router.push(routes.login());
@@ -260,19 +311,18 @@ export function ConversationPage({ conversationId }: { conversationId: string })
     );
   }
 
-  const participantName = otherParticipant
-    ? otherParticipant.first_name && otherParticipant.last_name
-      ? `${otherParticipant.first_name} ${otherParticipant.last_name}`
-      : otherParticipant.username
-    : 'Unknown User';
+  const otherParticipant =
+    participants.find((p) => p.id !== user?.id) || participants[0];
 
-  const participantInitials = getInitials(
-    otherParticipant
-      ? otherParticipant.first_name && otherParticipant.last_name
+  const participantName = otherParticipant
+    ? otherParticipant.full_name 
+      ? otherParticipant.full_name
+      : otherParticipant.first_name && otherParticipant.last_name
         ? `${otherParticipant.first_name} ${otherParticipant.last_name}`
-        : otherParticipant.username || 'U'
-      : 'U'
-  );
+        : otherParticipant.username || 'User'
+    : 'Conversation';
+
+  const participantInitials = getInitials(participantName);
 
   return (
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -358,7 +408,6 @@ export function ConversationPage({ conversationId }: { conversationId: string })
           {/* ── Messages ─────────────────────────────────────────────────── */}
           <ScrollArea
             className="h-[calc(100vh-340px)] min-h-[300px] max-h-[600px]"
-            ref={scrollAreaRef}
           >
             <div className="p-4 space-y-3">
               {messages.length === 0 && (
@@ -432,7 +481,7 @@ export function ConversationPage({ conversationId }: { conversationId: string })
                             : 'bg-muted text-foreground rounded-2xl rounded-bl-md'
                         )}
                       >
-                        {msg.content}
+                        {msg.text}
                       </div>
 
                       {/* Timestamp + read status */}
@@ -455,12 +504,12 @@ export function ConversationPage({ conversationId }: { conversationId: string })
                           <span
                             className={cn(
                               'text-[10px]',
-                              msg.read
+                              msg.read_at
                                 ? 'text-emerald-500'
                                 : 'text-muted-foreground'
                             )}
                           >
-                            {msg.read ? 'Read' : 'Sent'}
+                            {msg.read_at ? 'Read' : 'Sent'}
                           </span>
                         )}
                       </div>
@@ -504,6 +553,26 @@ export function ConversationPage({ conversationId }: { conversationId: string })
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Quick Replies */}
+          <div className="px-3 sm:px-4 pt-3">
+            <ScrollArea className="w-full whitespace-nowrap">
+              <div className="flex gap-2 pb-2">
+                {QUICK_REPLIES.map((reply) => (
+                  <Button
+                    key={reply}
+                    variant="outline"
+                    size="sm"
+                    className="rounded-full text-[11px] sm:text-xs h-7 px-3 bg-muted/30 hover:bg-primary hover:text-white transition-colors border-muted-foreground/20"
+                    onClick={() => handleQuickReply(reply)}
+                  >
+                    {reply}
+                  </Button>
+                ))}
+              </div>
+              <ScrollBar orientation="horizontal" />
+            </ScrollArea>
+          </div>
 
           <div className="p-3 sm:p-4">
             <div className="flex items-end gap-2">

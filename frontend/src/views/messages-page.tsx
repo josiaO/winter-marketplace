@@ -7,6 +7,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   MessageSquare,
   Loader2,
+  Package,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -36,7 +37,14 @@ function InboxView() {
     setIsLoading(true);
     try {
       const res = await api.communications.conversations({ page: 1, page_size: 50 });
-      setConversations(res.results || []);
+      // Handle both paginated and non-paginated responses
+      if (Array.isArray(res)) {
+        setConversations(res);
+      } else if (res && typeof res === 'object' && 'results' in res) {
+        setConversations(res.results || []);
+      } else {
+        setConversations([]);
+      }
     } catch {
       toast.error('Failed to load conversations');
     } finally {
@@ -95,9 +103,9 @@ function InboxView() {
           <div className="space-y-2">
             <AnimatePresence>
               {conversations.map((conversation, index) => {
-                const otherParticipant = conversation.participants.find(
-                  (p) => p.id !== user?.id
-                ) || conversation.participants[0];
+                const otherParticipant = conversation.other_participant || (conversation.participants && conversation.participants.length > 0
+                  ? conversation.participants.find((p: any) => p.id !== user?.id) || conversation.participants[0]
+                  : null);
 
                 const lastMessage = conversation.last_message;
 
@@ -147,9 +155,7 @@ function InboxView() {
                             ? 'font-semibold text-foreground'
                             : 'text-foreground'
                         )}>
-                          {otherParticipant?.first_name && otherParticipant?.last_name
-                            ? `${otherParticipant.first_name} ${otherParticipant.last_name}`
-                            : otherParticipant?.username || 'Unknown User'}
+                          {otherParticipant?.full_name || otherParticipant?.username || 'User'}
                         </h3>
                         {lastMessage && (
                           <span className="text-xs text-muted-foreground flex-shrink-0">
@@ -177,7 +183,7 @@ function InboxView() {
                             : 'text-muted-foreground'
                         )}>
                           {lastMessage.sender === user?.id ? 'You: ' : ''}
-                          {lastMessage.content}
+                          {lastMessage.text}
                         </p>
                       )}
                     </div>

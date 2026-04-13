@@ -1,14 +1,20 @@
-import type { NextConfig } from "next";
 import path from "path";
+import { fileURLToPath } from "url";
 
-const nextConfig: NextConfig = {
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   output: "standalone",
   /**
    * Prevent Turbopack from inferring the monorepo root (which causes huge watch
    * sets and can hit Linux inotify limits). Keep it scoped to this app only.
    */
-  turbopack: {
-    root: path.resolve(__dirname),
+  experimental: {
+    turbo: {
+      root: path.resolve(__dirname),
+    },
   },
   images: {
     remotePatterns: [

@@ -48,7 +48,7 @@ import { getInitials } from '@/lib/helpers';
 import type { Category } from '@/types/api';
 import { canAccessAdminPortal, canAccessSellerPortal } from '@/lib/auth-roles';
 import { routes, topLevelNavFromPathname } from '@/lib/routes';
-import { useNotifications } from '@/hooks/use-notifications';
+import { useNotificationContext } from '@/components/providers/notification-provider';
 
 /** Derive display name from Django User (first_name + last_name || username) */
 function userDisplayName(user: {
@@ -73,7 +73,7 @@ export function SiteHeader() {
   const { searchQuery, setSearchQuery } = useUIStore();
   const { user, isAuthenticated, logout } = useAuthStore();
   const { itemCount } = useCartStore();
-  const { unreadCount: notificationUnread } = useNotifications();
+  const { unreadCount: notificationUnread } = useNotificationContext();
 
   useEffect(() => {
     const handleScroll = () => {

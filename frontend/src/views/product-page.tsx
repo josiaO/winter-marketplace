@@ -98,8 +98,10 @@ function collectSpecificationRows(listing: Listing): Array<{ label: string; valu
 
 export function ProductPage({ productId }: { productId: string }) {
   const router = useRouter();
-  const { user, isAuthenticated, isLoading: isAuthLoading } = useAuthStore();
-  const { setCart } = useCartStore();
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isAuthLoading = useAuthStore((state) => state.isLoading);
+  const setCart = useCartStore((state) => state.setCart);
   const [listing, setListing] = useState<Listing | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedImage, setSelectedImage] = useState(0);
@@ -123,7 +125,7 @@ export function ProductPage({ productId }: { productId: string }) {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   const fetchReviews = useCallback(async () => {
-    if (!productId) return;
+    if (!productId || productId === 'undefined') return;
     setIsLoadingReviews(true);
     try {
       const data = await api.trust.reviews({ listing: productId });
@@ -137,7 +139,7 @@ export function ProductPage({ productId }: { productId: string }) {
 
   // Parallelize core data fetching
   useEffect(() => {
-    if (!productId) return;
+    if (!productId || productId === 'undefined') return;
     setIsLoading(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
 
@@ -615,28 +617,27 @@ export function ProductPage({ productId }: { productId: string }) {
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs h-8 rounded-lg"
+                  className="text-xs h-9 rounded-lg px-4"
                   onClick={() => router.push(routes.store(storeSlug))}
                 >
-                  <Store className="w-3.5 h-3.5 mr-1" />
-                  Store
+                  <Store className="w-3.5 h-3.5 mr-1.5" />
+                  Visit Store
                 </Button>
               )}
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
-                className="text-xs h-8 rounded-lg"
+                className="text-xs h-9 rounded-lg px-4 bg-primary/10 hover:bg-primary/20 text-primary border-primary/20"
                 onClick={async () => {
                   if (isAuthLoading) return;
                   if (!isAuthenticated) {
                     toast.error('Please login to message the seller');
                     return;
                   }
-                  const targetSellerId = sellerId;
-                  if (!targetSellerId) return;
+                  if (!sellerId) return;
                   try {
                     const conv = await api.communications.startConversation({
-                      seller_id: targetSellerId,
+                      seller_id: sellerId,
                       listing_id: Number(productId),
                     });
                     router.push(routes.messageThread(String(conv.id)));
@@ -646,8 +647,8 @@ export function ProductPage({ productId }: { productId: string }) {
                 }}
                 disabled={!sellerId}
               >
-                <MessageSquare className="w-3.5 h-3.5 mr-1" />
-                Message
+                <MessageSquare className="w-3.5 h-3.5 mr-1.5" />
+                Message Seller
               </Button>
             </div>
           </div>
@@ -887,9 +888,9 @@ export function ProductPage({ productId }: { productId: string }) {
               <div className="space-y-4 max-h-96 overflow-y-auto pr-1">
                 {reviews.map((review) => {
                   const reviewerName =
-                    review.reviewer.first_name && review.reviewer.last_name
+                    review.reviewer?.first_name && review.reviewer?.last_name
                       ? `${review.reviewer.first_name} ${review.reviewer.last_name}`
-                      : review.reviewer.username;
+                      : review.reviewer?.username || 'Anonymous User';
 
                   return (
                     <motion.div
@@ -901,7 +902,7 @@ export function ProductPage({ productId }: { productId: string }) {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           <Avatar className="h-7 w-7">
-                            <AvatarImage src={review.reviewer.avatar || undefined} alt={reviewerName} />
+                            <AvatarImage src={review.reviewer?.avatar || undefined} alt={reviewerName} />
                             <AvatarFallback className="text-[10px]">
                               {getInitials(reviewerName)}
                             </AvatarFallback>

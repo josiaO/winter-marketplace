@@ -32,13 +32,12 @@ export function SellerDashboardPage() {
   const [openDisputes, setOpenDisputes] = useState(0);
 
   useEffect(() => {
-    if (!isAuthenticated) return router.push(routes.login());
-    if (!user?.is_seller) return router.push(routes.sellerRegister());
+    if (!isAuthenticated || !user?.is_seller) return;
 
     async function loadData() {
       try {
         const [stats, prog, unread, disputes] = await Promise.all([
-          api.commerce.sellerStats(),
+          api.insights.sellerStats(),
           api.sellers.onboardingProgress(),
           api.communications.unreadCount(),
           api.escrow.disputes({ status: 'open' })
@@ -79,8 +78,7 @@ export function SellerDashboardPage() {
   const showBusinessUpgrade = !isProgressLoading && progress && !progress.step_business_upgraded && ((dashboard?.total_revenue ?? 0) > 500000 || (dashboard?.total_orders ?? 0) >= 20);
 
   return (
-    <div className="min-h-[80vh] px-4 py-8">
-      <div className="max-w-7xl mx-auto space-y-6">
+    <div className="space-y-6">
         
         {/* Onboarding State A block */}
         <AnimatePresence>
@@ -190,7 +188,7 @@ export function SellerDashboardPage() {
               <AlertTitle className="text-orange-800 dark:text-orange-400">Action Required: Disputes</AlertTitle>
               <AlertDescription className="flex items-center justify-between">
                 <span>There are {openDisputes} open disputes that need your response.</span>
-                <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent" onClick={() => router.push(routes.sellerOrders())}>Review Disputes</Button>
+                <Button size="sm" variant="outline" className="h-7 text-xs bg-transparent" onClick={() => router.push(`${routes.sellerOrders()}?status=disputed`)}>Review Disputes</Button>
               </AlertDescription>
             </Alert>
           )}
@@ -198,12 +196,35 @@ export function SellerDashboardPage() {
 
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[
+            { label: 'Total Revenue', value: formatTZS(dashboard?.total_revenue ?? 0), icon: DollarSign, color: 'text-green-600', bg: 'bg-green-100' },
             { label: 'Total Orders', value: dashboard?.total_orders ?? 0, icon: ShoppingBag, color: 'text-orange-600', bg: 'bg-orange-100' },
-            { label: 'Revenue', value: formatTZS(dashboard?.total_revenue ?? 0), icon: DollarSign, color: 'text-green-600', bg: 'bg-green-100' },
-            { label: 'Pending Payouts', value: formatTZS(dashboard?.pending_payouts ?? 0), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-100' },
-            { label: 'Escrow Balance', value: formatTZS(dashboard?.escrow_balance ?? 0), icon: Shield, color: 'text-teal-600', bg: 'bg-teal-100' }
+            { label: 'Escrow Balance', value: formatTZS(dashboard?.escrow_balance ?? 0), icon: Shield, color: 'text-teal-600', bg: 'bg-teal-100' },
+            { label: 'Pending Payouts', value: formatTZS(dashboard?.pending_payouts ?? 0), icon: Clock, color: 'text-amber-600', bg: 'bg-amber-100' }
           ].map((stat, i) => (
             <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 * i }}>
+              <Card className={`border-0 shadow-sm  ${isStateA ? 'opacity-60 grayscale' : 'opacity-100 hover:shadow-md'} transition-all`}>
+                <CardContent className="p-4 sm:p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${stat.bg}`}>
+                      <stat.icon className={`w-5 h-5 ${stat.color}`} />
+                    </div>
+                  </div>
+                  {isLoading ? <Skeleton className="h-7 w-24 mb-1" /> : <p className="text-xl sm:text-2xl font-bold">{stat.value}</p>}
+                  <p className="text-xs text-muted-foreground mt-1">{stat.label}</p>
+                </CardContent>
+              </Card>
+            </motion.div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[
+            { label: 'Active Listings', value: dashboard?.active_listings ?? 0, icon: Package, color: 'text-blue-600', bg: 'bg-blue-100' },
+            { label: 'Total Sales', value: dashboard?.total_sales ?? 0, icon: TrendingUp, color: 'text-purple-600', bg: 'bg-purple-100' },
+            { label: 'Store Rating', value: `${dashboard?.avg_rating?.toFixed(1) ?? '0.0'} / 5`, icon: BarChart3, color: 'text-amber-500', bg: 'bg-amber-50' },
+            { label: 'Total Reviews', value: dashboard?.total_reviews ?? 0, icon: ClipboardList, color: 'text-pink-600', bg: 'bg-pink-100' }
+          ].map((stat, i) => (
+            <motion.div key={stat.label} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 + (0.05 * i) }}>
               <Card className={`border-0 shadow-sm  ${isStateA ? 'opacity-60 grayscale' : 'opacity-100 hover:shadow-md'} transition-all`}>
                 <CardContent className="p-4 sm:p-5">
                   <div className="flex items-center justify-between mb-3">
@@ -273,7 +294,6 @@ export function SellerDashboardPage() {
             </Card>
           </motion.div>
         </div>
-      </div>
     </div>
   );
 }

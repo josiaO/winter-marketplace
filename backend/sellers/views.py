@@ -82,15 +82,13 @@ class OnboardingProgressView(APIView):
             sp = request.user.seller_profile
         except (AttributeError, SellerProfile.DoesNotExist):
             return Response({
-                'steps': {
-                    'registration': True,
-                    'store_setup': False,
-                    'id_submitted': False,
-                    'id_approved': False,
-                    'payout_added': False,
-                    'first_product': False,
-                    'business_upgraded': False,
-                },
+                'step_registration': True,
+                'step_store_setup': False,
+                'step_id_submitted': False,
+                'step_id_approved': False,
+                'step_payout_added': False,
+                'step_first_product': False,
+                'step_business_upgraded': False,
                 'completion_percentage': 0,
                 'verification_status': 'not_started',
                 'store_is_active': False,
@@ -106,15 +104,13 @@ class OnboardingProgressView(APIView):
             rejection = iv.rejection_reason or None
 
         payload = {
-            'steps': {
-                'registration': progress.step_registration,
-                'store_setup': progress.step_store_setup,
-                'id_submitted': progress.step_id_submitted,
-                'id_approved': progress.step_id_approved,
-                'payout_added': progress.step_payout_added,
-                'first_product': progress.step_first_product,
-                'business_upgraded': progress.step_business_upgraded,
-            },
+            'step_registration': progress.step_registration,
+            'step_store_setup': progress.step_store_setup,
+            'step_id_submitted': progress.step_id_submitted,
+            'step_id_approved': progress.step_id_approved,
+            'step_payout_added': progress.step_payout_added,
+            'step_first_product': progress.step_first_product,
+            'step_business_upgraded': progress.step_business_upgraded,
             'completion_percentage': seller_svc.get_onboarding_completion_percentage(progress),
             'verification_status': sp.verification_status,
             'store_is_active': sp.is_active,
@@ -127,6 +123,7 @@ class OnboardingProgressView(APIView):
 
 class StoreSetupView(APIView):
     permission_classes = [IsAuthenticated, IsSeller]
+    parser_classes = [MultiPartParser, FormParser]
 
     @extend_schema(tags=['sellers'], request=StoreSetupSerializer, responses={200: OpenApiTypes.OBJECT})
     def post(self, request):
@@ -141,6 +138,14 @@ class StoreSetupView(APIView):
         sp.store_description = (d.get('store_description') or '').strip()
         sp.seller_type = d.get('seller_type', 'product')
         sp.business_name = sp.store_name
+        
+        logo = d.get('store_logo')
+        if logo:
+            sp.store_logo = logo
+        banner = d.get('store_banner')
+        if banner:
+            sp.store_banner = banner
+            
         sp.save()
 
         # Sync using top-level import
@@ -162,6 +167,8 @@ class StoreSetupView(APIView):
                 'store_category_other': sp.store_category_other,
                 'store_location': sp.store_location,
                 'store_description': sp.store_description,
+                'store_logo': sp.store_logo.url if sp.store_logo else None,
+                'store_banner': sp.store_banner.url if sp.store_banner else None,
                 'seller_type': sp.seller_type,
                 'verification_status': sp.verification_status,
                 'is_active': sp.is_active,
@@ -350,6 +357,7 @@ class SellerProfileDashboardView(APIView):
             'store_location': sp.store_location,
             'store_description': sp.store_description,
             'store_logo': sp.store_logo.url if sp.store_logo else None,
+            'store_banner': sp.store_banner.url if sp.store_banner else None,
             'business_email': sp.business_email or '',
             'business_phone': sp.business_phone or '',
             'business_address': sp.business_address or '',

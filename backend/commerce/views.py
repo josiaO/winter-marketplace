@@ -787,12 +787,73 @@ class OrderViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def payouts(self, request):
-        """Returns payout history for the seller from the engine."""
+        """Returns payout history. Sellers see their own; Admins see all (with optional status filtering)."""
         user = request.user
-        payout_qs = EngPayout.objects.filter(seller=user).order_by('-created_at')
+        role = request.query_params.get('role')
+        status_filter = request.query_params.get('status')
         
+        is_admin = user.is_superuser or user.is_staff
+        
+        if is_admin and role != 'seller':
+            payout_qs = EngPayout.objects.all().order_by('-created_at')
+        else:
+            payout_qs = EngPayout.objects.filter(seller=user).order_by('-created_at')
+            
+        if status_filter and status_filter != 'all':
+            payout_qs = payout_qs.filter(status=status_filter)
+        
+        # Use pagination for large payout lists
+        page = self.paginate_queryset(payout_qs)
+        
+        # Calculate overall stats for summary cards (ignoring the current status filter but respecting the seller/admin context)
+        # Using a separate base queryset for stats
+        if is_admin and role != 'seller':
+            stats_qs = EngPayout.objects.all()
+        else:
+            stats_qs = EngPayout.objects.filter(seller=user)
+
+        summary_stats = {
+            'pending': {'count': stats_qs.filter(status='pending').count(), 'amount': float(stats_qs.filter(status='pending').aggregate(Sum('amount'))['amount__sum'] or 0)},
+            'processing': {'count': stats_qs.filter(status='processing').count(), 'amount': float(stats_qs.filter(status='processing').aggregate(Sum('amount'))['amount__sum'] or 0)},
+            'released': {'count': stats_qs.filter(status='completed').count(), 'amount': float(stats_qs.filter(status='completed').aggregate(Sum('amount'))['amount__sum'] or 0)},
+            'failed': {'count': stats_qs.filter(status='failed').count(), 'amount': float(stats_qs.filter(status='failed').aggregate(Sum('amount'))['amount__sum'] or 0)},
+            'total_fees': 0 # Payout model does not store fees directly
+        }
+
+        if page is not None:
+            serializer = PayoutSerializer(page, many=True)
+            res = self.get_paginated_response(serializer.data)
+            res.data['summary_stats'] = summary_stats
+            return res
+
         serializer = PayoutSerializer(payout_qs, many=True)
-        return Response({'payouts': serializer.data, 'count': payout_qs.count()})
+        return Response({
+            'results': serializer.data, 
+            'count': payout_qs.count(),
+            'summary_stats': summary_stats
+        })
+
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[permissions.IsAuthenticated, IsAdminUser],
+    )
+    def process_payout(self, request):
+        """Process a specific payout by its ID (Admin only)."""
+        payout_id = request.data.get('payout_id')
+        if not payout_id:
+            return Response({'error': 'payout_id is required'}, status=status.HTTP_400_BAD_REQUEST)
+        
+        payout = get_object_or_404(EngPayout, pk=payout_id)
+        
+        try:
+            process_seller_payout(payout)
+            return Response(PayoutSerializer(payout).data)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            logger.error(f"Failed to process payout {payout_id}: {e}")
+            return Response({'error': 'Failed to process payout.'}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 

@@ -83,7 +83,10 @@ export function commerceOrderItemLineTotal(item: CommerceOrderItemLike): number 
  * Format a date string to a readable format
  */
 export function formatDate(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-TZ', {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('en-TZ', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -94,7 +97,10 @@ export function formatDate(dateString: string): string {
  * Format a date string with time
  */
 export function formatDateTime(dateString: string): string {
-  return new Date(dateString).toLocaleDateString('en-TZ', {
+  if (!dateString) return 'N/A';
+  const date = new Date(dateString);
+  if (isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('en-TZ', {
     year: 'numeric',
     month: 'short',
     day: 'numeric',

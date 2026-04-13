@@ -39,6 +39,7 @@ export function SellerPayoutsPage() {
   const { user, isAuthenticated } = useAuthStore();
   const [payouts, setPayouts] = useState<Payout[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [serverStats, setServerStats] = useState<any>(null);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -53,9 +54,12 @@ export function SellerPayoutsPage() {
 
     async function loadPayouts() {
       try {
-        const data = await api.commerce.payouts();
-        const items = (data as PaginatedResponse<Payout>).results ?? (Array.isArray(data) ? data : []);
+        const res: any = await api.commerce.payouts();
+        const items = res.results ?? (Array.isArray(res) ? res : []);
         setPayouts(items as Payout[]);
+        if (res.summary_stats) {
+          setServerStats(res.summary_stats);
+        }
       } catch {
         toast.error('Failed to load payouts.');
       } finally {
@@ -66,6 +70,15 @@ export function SellerPayoutsPage() {
   }, [isAuthenticated, user, router]);
 
   const summary = useMemo(() => {
+    if (serverStats) {
+      return {
+        totalEarned: (serverStats.released?.amount || 0) + (serverStats.pending?.amount || 0) + (serverStats.processing?.amount || 0),
+        totalFee: serverStats.total_fees || 0,
+        pendingAmount: (serverStats.pending?.amount || 0) + (serverStats.processing?.amount || 0),
+        releasedAmount: serverStats.released?.amount || 0,
+      };
+    }
+
     const totalEarned = payouts.reduce((sum, p) => sum + p.net_amount, 0);
     const totalFee = payouts.reduce((sum, p) => sum + p.fee, 0);
     const pendingAmount = payouts
@@ -75,7 +88,7 @@ export function SellerPayoutsPage() {
       .filter((p) => p.status === 'released')
       .reduce((sum, p) => sum + p.net_amount, 0);
     return { totalEarned, totalFee, pendingAmount, releasedAmount };
-  }, [payouts]);
+  }, [payouts, serverStats]);
 
   const getPayoutStatusBadge = (status: string) => {
     switch (status) {
@@ -146,8 +159,7 @@ export function SellerPayoutsPage() {
   ];
 
   return (
-    <div className="min-h-[80vh] px-4 py-8">
-      <div className="max-w-6xl mx-auto space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -309,7 +321,6 @@ export function SellerPayoutsPage() {
             </CardContent>
           </Card>
         </motion.div>
-      </div>
     </div>
   );
 }

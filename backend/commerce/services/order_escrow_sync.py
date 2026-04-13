@@ -87,3 +87,25 @@ def sync_marketplace_order_on_escrow_refund(transaction: Transaction) -> None:
             transaction.linked_order_id,
             exc,
         )
+def sync_marketplace_order_on_escrow_dispute(transaction: Transaction) -> None:
+    """After DISPUTED, mark linked marketplace order as disputed."""
+    if not transaction.linked_order_id:
+        return
+    try:
+        order = Order.objects.get(pk=transaction.linked_order_id)
+        if order.status == 'disputed':
+            return
+        with order_status_write_context(order):
+            order.status = 'disputed'
+            order.save(update_fields=['status', 'updated_at'])
+        logger.info(
+            'Synced order %s to disputed after escrow DISPUTE for %s',
+            order.id,
+            transaction.reference,
+        )
+    except Exception as exc:
+        logger.warning(
+            'Could not sync order status to disputed for order %s: %s',
+            transaction.linked_order_id,
+            exc,
+        )

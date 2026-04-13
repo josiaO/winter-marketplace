@@ -329,12 +329,10 @@ export function AdminDisputesPage() {
   }, []);
 
   useEffect(() => {
-    if (!isAuthenticated || user?.role !== 'admin') {
-      router.push(routes.home());
-      return;
+    if (isAuthenticated && user?.role === 'admin') {
+      fetchOrders();
     }
-    fetchOrders();
-  }, [isAuthenticated, user, navigate, fetchOrders]);
+  }, [isAuthenticated, user, fetchOrders]);
 
   const filteredOrders = useMemo(() => {
     if (activeTab === 'all') return allOrders;

@@ -14,6 +14,8 @@ import {
   Loader2,
   ArrowLeft,
   Info,
+  BadgeCheck,
+  FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -163,8 +165,7 @@ export function SellerVerificationPage() {
   const completion = onboarding?.completion_percentage ?? 0;
 
   return (
-    <div className="min-h-[80vh] px-4 py-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -563,7 +564,6 @@ export function SellerVerificationPage() {
             </CardContent>
           </Card>
         </motion.div>
-      </div>
     </div>
   );
 }

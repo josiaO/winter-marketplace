@@ -116,31 +116,24 @@ export function SellerEscrowPage() {
   const [pageSize] = useState(10);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      router.push(routes.login());
-      return;
+    if (isAuthenticated && user?.is_seller) {
+      void loadEscrow();
     }
-    if (!user?.is_seller) {
-      toast.error('You must be a seller to view escrow transactions.');
-      router.push(routes.home());
-      return;
-    }
+  }, [isAuthenticated, user, page, pageSize]);
 
-    async function loadEscrow() {
-      setIsLoading(true);
-      try {
-        const result = await api.commerce.sellerEscrow({ page, page_size: pageSize });
-        const data = result as any;
-        setTransactions(data.results || []);
-        setTotalCount(data.count || 0);
-      } catch {
-        toast.error('Failed to load escrow transactions.');
-      } finally {
-        setIsLoading(false);
-      }
+  async function loadEscrow() {
+    setIsLoading(true);
+    try {
+      const result = await api.commerce.sellerEscrow({ page, page_size: pageSize });
+      const data = result as any;
+      setTransactions(data.results || []);
+      setTotalCount(data.count || 0);
+    } catch {
+      toast.error('Failed to load escrow transactions.');
+    } finally {
+      setIsLoading(false);
     }
-    loadEscrow();
-  }, [isAuthenticated, user, navigate, page, pageSize]);
+  }
 
   const summary = useMemo(() => {
     const totalHeld = transactions
@@ -185,8 +178,7 @@ export function SellerEscrowPage() {
   ];
 
   return (
-    <div className="min-h-[80vh] px-4 py-8">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="space-y-6">
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -393,7 +385,6 @@ export function SellerEscrowPage() {
             </CardContent>
           </Card>
         </motion.div>
-      </div>
     </div>
   );
 }

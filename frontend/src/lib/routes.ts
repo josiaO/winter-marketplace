@@ -62,6 +62,8 @@ export const routes = {
   sellerEscrow: () => '/seller/escrow',
   sellerVerification: () => '/seller/verification',
   sellerPaymentMethod: () => '/seller/payment-method',
+  sellerSettings: () => '/seller/settings',
+  storeView: (slug: string) => `/stores/${slug}`,
   
   sellerOnboardingStoreSetup: () => '/seller/onboarding/store-setup',
   sellerOnboardingVerifyIdentity: () => '/seller/onboarding/verify-identity',

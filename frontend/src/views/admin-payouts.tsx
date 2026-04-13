@@ -89,6 +89,7 @@ export function AdminPayoutsPage() {
   const [activeTab, setActiveTab] = useState<string>('pending');
   const [page, setPage] = useState(1);
   const [processingId, setProcessingId] = useState<number | null>(null);
+  const [serverStats, setServerStats] = useState<any>(null);
 
   const fetchPayouts = useCallback(async () => {
     setIsLoading(true);
@@ -98,8 +99,11 @@ export function AdminPayoutsPage() {
       };
       if (activeTab !== 'all') params.status = activeTab;
 
-      const res: PaginatedResponse<Payout> = await api.commerce.payouts(params);
+      const res: any = await api.commerce.payouts(params);
       setAllPayouts(res.results);
+      if (res.summary_stats) {
+        setServerStats(res.summary_stats);
+      }
     } catch {
       toast.error('Failed to load payouts.');
     } finally {
@@ -143,10 +147,24 @@ export function AdminPayoutsPage() {
 
   // Compute summary stats from all payouts fetched (not just current tab)
   const summaryStats = useMemo(() => {
-    const pending = allPayouts.filter((p) => p.status === 'pending');
-    const processing = allPayouts.filter((p) => p.status === 'processing');
-    const released = allPayouts.filter((p) => p.status === 'released');
-    const failed = allPayouts.filter((p) => p.status === 'failed');
+    if (serverStats) {
+      return {
+        pendingCount: serverStats.pending?.count || 0,
+        pendingAmount: serverStats.pending?.amount || 0,
+        processingCount: serverStats.processing?.count || 0,
+        releasedCount: serverStats.released?.count || 0,
+        releasedAmount: serverStats.released?.amount || 0,
+        failedCount: serverStats.failed?.count || 0,
+        totalFees: serverStats.total_fees || 0,
+      };
+    }
+    
+    // Fallback to local filtering if server stats not yet available (though they should be)
+    const list = allPayouts || [];
+    const pending = list.filter((p) => p.status === 'pending');
+    const processing = list.filter((p) => p.status === 'processing');
+    const released = list.filter((p) => p.status === 'released');
+    const failed = list.filter((p) => p.status === 'failed');
     return {
       pendingCount: pending.length,
       pendingAmount: pending.reduce((sum, p) => sum + p.net_amount, 0),
@@ -154,14 +172,15 @@ export function AdminPayoutsPage() {
       releasedCount: released.length,
       releasedAmount: released.reduce((sum, p) => sum + p.net_amount, 0),
       failedCount: failed.length,
-      totalFees: allPayouts.reduce((sum, p) => sum + p.fee, 0),
+      totalFees: list.reduce((sum, p) => sum + p.fee, 0),
     };
-  }, [allPayouts]);
+  }, [allPayouts, serverStats]);
 
   if (!isAuthenticated || !user || user.role !== 'admin') return null;
-
-  const totalPages = Math.ceil(allPayouts.length / PAGE_SIZE);
-  const paginatedPayouts = allPayouts.slice(
+  
+  const payoutList = allPayouts || [];
+  const totalPages = Math.ceil(payoutList.length / PAGE_SIZE);
+  const paginatedPayouts = payoutList.slice(
     (page - 1) * PAGE_SIZE,
     page * PAGE_SIZE,
   );
@@ -332,7 +351,7 @@ export function AdminPayoutsPage() {
                           <Skeleton key={i} className="h-14 w-full" />
                         ))}
                       </div>
-                    ) : allPayouts.length === 0 ? (
+                    ) : payoutList.length === 0 ? (
                       <div className="text-center py-16">
                         <Wallet className="w-12 h-12 mx-auto mb-3 text-muted-foreground/30" />
                         <h3 className="font-semibold text-foreground text-lg mb-1">No payouts found</h3>

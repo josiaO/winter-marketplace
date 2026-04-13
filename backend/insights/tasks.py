@@ -12,6 +12,10 @@ def track_visitor_event_task(session_key, ip_address, user_agent, path, method, 
     Asynchronously persist visitor tracking data and events.
     This offloads database writes from the main request/response cycle.
     """
+    if not session_key:
+        logger.warning("track_visitor_event_task called without session_key; skipping.")
+        return
+
     try:
         # 1. Update or create Visitor record
         visitor, created = Visitor.objects.get_or_create(

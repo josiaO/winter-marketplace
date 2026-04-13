@@ -721,7 +721,12 @@ class ApiClient {
     sellerEscrow: (): Promise<unknown> => this.get('/commerce/orders/seller_escrow/'),
 
     /** GET /commerce/orders/payouts/ */
-    payouts: (): Promise<unknown> => this.get('/commerce/orders/payouts/'),
+    payouts: (params?: Record<string, string | number | boolean | null | undefined>): Promise<PaginatedResponse<Payout>> => 
+      this.get('/commerce/orders/payouts/', params),
+
+    /** POST /commerce/orders/process_payout/ */
+    processPayout: (payoutId: number | string): Promise<Payout> =>
+      this.post('/commerce/orders/process_payout/', { payout_id: payoutId }),
   };
 
   // ===========================================================================
@@ -796,7 +801,6 @@ class ApiClient {
     /** GET /sellers/onboarding/progress/ */
     onboardingProgress: (): Promise<unknown> => this.get('/sellers/onboarding/progress/'),
 
-    /** POST /sellers/store/setup/ */
     storeSetup: (payload: {
       store_name: string;
       store_categories?: string[];
@@ -804,7 +808,23 @@ class ApiClient {
       store_category_other?: string;
       store_location: string;
       store_description?: string;
-    }): Promise<unknown> => this.post('/sellers/store/setup/', payload),
+      store_logo?: File | null;
+      store_banner?: File | null;
+      seller_type?: 'product' | 'service';
+    }): Promise<unknown> => {
+      const fd = new FormData();
+      Object.entries(payload).forEach(([key, value]) => {
+        if (value === undefined || value === null) return;
+        if (key === 'store_categories' && Array.isArray(value)) {
+          value.forEach(v => fd.append('store_categories', v));
+        } else if (value instanceof File) {
+          fd.append(key, value);
+        } else {
+          fd.append(key, String(value));
+        }
+      });
+      return this.post('/sellers/store/setup/', fd);
+    },
 
     /** POST /sellers/verification/identity/ (multipart) */
     submitIdentityVerification: (payload: {
@@ -880,6 +900,10 @@ class ApiClient {
     /** GET /sellers/admin/verifications/ */
     adminVerifications: (params?: Record<string, string | number | boolean | null | undefined>): Promise<any> =>
       this.get('/admin/sellers/', params),
+
+    /** GET /admin/sellers/:id/ */
+    adminSellerDetail: (id: number | string): Promise<any> =>
+      this.get(`/admin/sellers/${id}/`),
 
     /** POST /admin/sellers/:id/identity/approve/ */
     adminVerifyApprove: (id: number | string): Promise<any> =>
@@ -979,6 +1003,10 @@ class ApiClient {
     /** GET /communications/conversations/ */
     conversations: (params?: Record<string, string | number | boolean | null | undefined>): Promise<PaginatedResponse<Conversation>> =>
       this.get('/communications/conversations/', params),
+
+    /** GET /communications/conversations/:id/ */
+    conversationDetail: (id: number | string): Promise<Conversation> =>
+      this.get(`/communications/conversations/${id}/`),
 
     /** POST /communications/conversations/start_conversation/ */
     startConversation: (payload: {
@@ -1172,6 +1200,10 @@ class ApiClient {
     /** GET /insights/seller-stats-summary/ */
     sellerStatsSummary: (): Promise<unknown> =>
       this.get('/insights/seller-stats-summary/'),
+
+    /** GET /insights/seller-stats/ */
+    sellerStats: (): Promise<unknown> =>
+      this.get('/insights/seller-stats/'),
   };
 
   // ===========================================================================

@@ -129,6 +129,12 @@ class SellerProfile(BaseModel):
         blank=True,
         null=True,
     )
+    store_banner = models.ImageField(
+        upload_to='store_banners/',
+        blank=True,
+        null=True,
+        help_text=_("Banner image for the seller's storefront")
+    )
     verification_status = models.CharField(
         max_length=20,
         choices=VerificationStatus.choices,

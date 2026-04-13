@@ -43,6 +43,8 @@ class StoreSetupSerializer(serializers.Serializer):
         default='product',
     )
     store_description = serializers.CharField(required=False, allow_blank=True, default='')
+    store_logo = serializers.ImageField(required=False, allow_null=True)
+    store_banner = serializers.ImageField(required=False, allow_null=True)
 
     def validate_store_categories(self, value):
         if not value:

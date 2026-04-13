@@ -298,18 +298,19 @@ SOCIALACCOUNT_PROVIDERS = {
 }
 
 REST_FRAMEWORK = {
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.LimitOffsetPagination',
-    'PAGE_SIZE': 100,
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 20,
+    'PAGE_SIZE_QUERY_PARAM': 'limit',
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle'
-    ],
+    ] if not DEBUG else [],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '20000/hour' if DEBUG else '100/day',  # Much higher for development (was 5000/day)
-        'user': '50000/hour' if DEBUG else '1000/day',  # Much higher for development
+        'anon': '20000/hour' if DEBUG else '100/day',
+        'user': '50000/hour' if DEBUG else '1000/day',
         # Auth: scoped throttles for login/refresh (IP-based)
-        'auth_login': '200/hour' if DEBUG else '20/hour',
-        'auth_refresh': '600/hour' if DEBUG else '60/hour',
+        'auth_login': '2000/hour' if DEBUG else '20/hour',
+        'auth_refresh': '6000/hour' if DEBUG else '60/hour',
         'listing_list_anon': '300/min',
         'listing_list_user': '600/min',
         'messages': '60/min',  # Messaging-specific rate limit
@@ -908,6 +909,7 @@ TRUST_REPORT_MIN_DESCRIPTION_LEN = int(os.getenv('TRUST_REPORT_MIN_DESCRIPTION_L
 TRUST_REPORT_MAX_DESCRIPTION_LEN = int(os.getenv('TRUST_REPORT_MAX_DESCRIPTION_LEN', '5000'))
 
 # axes settings
+AXES_ENABLED = True
 AXES_FAILURE_LIMIT = int(os.getenv('AXES_FAILURE_LIMIT', '5'))
 AXES_COOLOFF_TIME = int(os.getenv('AXES_COOLOFF_TIME', '1')) # 1 hour
 AXES_LOCKOUT_TEMPLATE = None # Can set custom template later
@@ -917,6 +919,9 @@ AXES_IPWARE_META_PRECEDENCE_ORDER = [
    'HTTP_X_FORWARDED_FOR',
    'REMOTE_ADDR',
 ]
+AXES_LOCKOUT_PARAMETERS = [["username", "ip_address"]]
+AXES_RESET_ON_SUCCESS = True
+AXES_ENABLE_ADMIN = True
 
 # debug_toolbar settings
 INTERNAL_IPS = [
@@ -926,6 +931,22 @@ INTERNAL_IPS = [
 DEBUG_TOOLBAR_CONFIG = {
     'SHOW_TOOLBAR_CALLBACK': 'backend.settings.show_debug_toolbar',
 }
+
+DEBUG_TOOLBAR_PANELS = [
+    'debug_toolbar.panels.history.HistoryPanel',
+    'debug_toolbar.panels.versions.VersionsPanel',
+    'debug_toolbar.panels.timer.TimerPanel',
+    'debug_toolbar.panels.settings.SettingsPanel',
+    'debug_toolbar.panels.headers.HeadersPanel',
+    'debug_toolbar.panels.request.RequestPanel',
+    'debug_toolbar.panels.sql.SQLPanel',
+    'debug_toolbar.panels.staticfiles.StaticFilesPanel',
+    'debug_toolbar.panels.templates.TemplatesPanel',
+    'debug_toolbar.panels.signals.SignalsPanel',
+    'debug_toolbar.panels.logging.LoggingPanel',
+    'debug_toolbar.panels.redirects.RedirectsPanel',
+    'debug_toolbar.panels.profiling.ProfilingPanel',
+]
 
 # silk settings
 # NOTE: Keep Python profiler disabled by default to avoid
