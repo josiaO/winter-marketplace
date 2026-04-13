@@ -78,24 +78,17 @@ class OrderLifecycleManager:
     def ship_order(order: Order, tracking_number: str = '', carrier: str = '', 
                    shipment_video=None, shipment_images=None, actor=None) -> Order:
         """Mark order as shipped and save evidence."""
-        if order.status not in ['pending', 'confirmed', 'processing']:
-            raise ValueError(f"Cannot ship order in {order.status} status.")
+        if order.status not in ['confirmed', 'processing']:
+            raise ValueError(
+                f"Cannot ship order in {order.status} status. "
+                "Wait until the buyer has paid (order is confirmed) before shipping."
+            )
 
         validate_commerce_upload_files(video=shipment_video, images=shipment_images)
 
         prev = order.status
         with order_status_write_context(order):
             now = timezone.now()
-            # Auto-confirm if shipping directly from pending
-            if order.status == 'pending':
-                order.confirmed_at = now
-                order.processing_at = now
-                safe_hold_funds_for_order(
-                    order,
-                    actor=actor,
-                    actor_label='System: Auto-Hold on Shipment',
-                    reason='Ship from pending',
-                )
 
             order.status = 'shipped'
             order.shipped_at = now
@@ -225,13 +218,28 @@ class OrderLifecycleManager:
 
     @staticmethod
     @transaction.atomic
-    def open_dispute(order: Order, actor=None, reason: str = '') -> Order:
+    def open_dispute(
+        order: Order,
+        actor=None,
+        reason: str = '',
+        *,
+        dispute_category: str = 'other',
+    ) -> Order:
         """Open a formal dispute."""
-        if order.status in ['cancelled', 'completed', 'disputed']:
-             raise ValueError(f"Cannot open dispute for order in {order.status} status.")
-        if order.status != 'arrived':
+        if order.status in ['cancelled', 'completed', 'disputed', 'delivered']:
+            raise ValueError(f"Cannot open dispute for order in {order.status} status.")
+
+        cat = (dispute_category or 'other').strip().lower()
+        shipped_ok_categories = {'never_arrived', 'seller_unresponsive'}
+        if order.status == 'arrived':
+            pass
+        elif order.status == 'shipped' and cat in shipped_ok_categories:
+            pass
+        else:
             raise ValueError(
-                "Disputes can only be opened after the order is marked as arrived at your location."
+                "Disputes about the item itself can be opened after the order is marked as arrived. "
+                "If the package never arrived or the seller is unresponsive while it is in transit, "
+                "open a dispute from the order screen and pick the matching reason."
             )
 
         prev = order.status

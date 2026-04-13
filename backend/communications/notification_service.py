@@ -101,25 +101,30 @@ class NotificationService(BaseNotificationService):
         notification_type: str = 'update',
         related_object_id: int = None,
         related_object_type: str = None,
-        send_push: bool = True
+        send_push: bool = True,
+        extra_data: dict | None = None,
     ):
         """Send a generic notification"""
         try:
+            payload = dict(extra_data or {})
             db_notification = self.create_db_notification(
                 user=user,
                 type=notification_type,
                 title=title,
                 message=message,
+                data=payload,
                 related_object_id=related_object_id,
                 related_object_type=related_object_type
             )
                 
             # 3. Handle Push if requested
             if send_push:
-                self.push.send_to_user(user, title, message, data={
+                push_data = {
                     'type': notification_type,
-                    'related_id': str(related_object_id) if related_object_id else ''
-                })
+                    'related_id': str(related_object_id) if related_object_id else '',
+                    **{k: str(v) for k, v in payload.items()},
+                }
+                self.push.send_to_user(user, title, message, data=push_data)
 
             return db_notification
             

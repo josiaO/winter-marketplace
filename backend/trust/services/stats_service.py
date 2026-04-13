@@ -24,11 +24,15 @@ def get_listing_review_stats(listing_id):
     total_reviews = reviews.count()
     rating_distribution_qs = reviews.values('rating').annotate(count=Count('id'))
     rating_distribution = {r['rating']: r['count'] for r in rating_distribution_qs}
-    
+    recommend_base = reviews.filter(rating__gte=4).count()
+    recommend_pct = round(100.0 * recommend_base / total_reviews) if total_reviews else None
+
     return {
         'average_rating': round(avg_rating, 2),
         'total_reviews': total_reviews,
-        'rating_distribution': rating_distribution
+        'verified_purchase_count': total_reviews,
+        'recommend_percentage': recommend_pct,
+        'rating_distribution': rating_distribution,
     }
 
 def get_seller_review_stats(seller_id):

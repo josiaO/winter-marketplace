@@ -234,16 +234,22 @@ class Review(BaseModel):
             if first_item and first_item.listing:
                 self.listing = first_item.listing
 
-        # Validate order status and escrow status
-        if self.order.status != 'delivered':
-            raise ValidationError("Order must be in 'delivered' status to leave a review.")
+        # Validate order status and escrow (engine is source of truth)
+        if self.order.status not in ('delivered', 'completed'):
+            raise ValidationError(
+                "Order must be delivered or completed to leave a review."
+            )
 
-        # Check escrow status
-        if not hasattr(self.order, 'escrow'):
+        from escrow_engine.models import Transaction
+        from escrow_engine.state_machine import TransactionStatus
+
+        txn = Transaction.objects.filter(linked_order=self.order).first()
+        if not txn:
             raise ValidationError("Order must have an escrow transaction.")
-
-        if self.order.escrow.status != 'released':
-            raise ValidationError("Order escrow must be 'released' to leave a review.")
+        if txn.status != TransactionStatus.RELEASED:
+            raise ValidationError(
+                "Order escrow must be released before a review can be published."
+            )
 
         # Ensure buyer is the reviewer
         if self.buyer != self.order.buyer:

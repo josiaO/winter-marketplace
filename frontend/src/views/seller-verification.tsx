@@ -27,7 +27,7 @@ import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
-import type { VerificationStatus } from '@/types/api';
+import { ApiClientError, type VerificationStatus } from '@/types/api';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -163,6 +163,9 @@ export function SellerVerificationPage() {
   if (!isAuthenticated || !user) return null;
 
   const completion = onboarding?.completion_percentage ?? 0;
+  const businessUpgradeAvailable = Boolean(onboarding?.business_upgrade_available);
+  const currentSales = onboarding?.total_sales ?? null;
+  const currentCompletedOrders = onboarding?.completed_orders ?? null;
 
   return (
     <div className="space-y-6">
@@ -430,6 +433,20 @@ export function SellerVerificationPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              {!businessUpgradeAvailable && (
+                <Alert>
+                  <AlertDescription>
+                    Business upgrade is locked until you reach the requirement.
+                    {currentSales !== null || currentCompletedOrders !== null ? (
+                      <>
+                        {' '}
+                        Current: {currentSales !== null ? `${currentSales} TZS sales` : '—'} /{' '}
+                        {currentCompletedOrders !== null ? `${currentCompletedOrders} completed orders` : '—'}.
+                      </>
+                    ) : null}
+                  </AlertDescription>
+                </Alert>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="text-sm font-medium text-foreground">Business Name</label>
@@ -493,9 +510,13 @@ export function SellerVerificationPage() {
 
               <Button
                 className="w-full gap-2"
-                disabled={businessSubmitting}
+                disabled={businessSubmitting || !businessUpgradeAvailable}
                 variant="secondary"
                 onClick={async () => {
+                  if (!businessUpgradeAvailable) {
+                    toast.error('Business upgrade is not available yet. Complete more sales or orders first.');
+                    return;
+                  }
                   if (!businessName || !tinNumber) {
                     toast.error('Business name and TIN number are required.');
                     return;
@@ -515,9 +536,13 @@ export function SellerVerificationPage() {
                     setBusinessCert(null);
                     await refresh();
                   } catch (err) {
-                    const message =
-                      err instanceof Error ? err.message : 'Failed to submit business verification.';
-                    toast.error(message);
+                    if (err instanceof ApiClientError) {
+                      toast.error(err.detail || err.message || 'Failed to submit business verification.');
+                    } else {
+                      const message =
+                        err instanceof Error ? err.message : 'Failed to submit business verification.';
+                      toast.error(message);
+                    }
                   } finally {
                     setBusinessSubmitting(false);
                   }

@@ -157,9 +157,25 @@ class CreateReportSerializer(serializers.ModelSerializer):
         return Report.objects.create(reporter=reporter, subject_user=subject, **validated_data)
 
 class ReviewMediaSerializer(serializers.ModelSerializer):
+    file_url = serializers.SerializerMethodField()
+
     class Meta:
         model = ReviewMedia
-        fields = ['id', 'file', 'media_type', 'caption', 'created_at']
+        fields = ['id', 'file', 'file_url', 'media_type', 'caption', 'created_at']
+
+    def get_file_url(self, obj):
+        if not obj.file:
+            return None
+        try:
+            url = obj.file.url
+            if url.startswith('http://') or url.startswith('https://'):
+                return url
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(url)
+            return url
+        except Exception:
+            return None
 
 class ReviewSerializer(serializers.ModelSerializer):
     buyer_name = serializers.CharField(source='buyer.username', read_only=True)
@@ -167,20 +183,25 @@ class ReviewSerializer(serializers.ModelSerializer):
     seller_name = serializers.CharField(source='seller.username', read_only=True)
     listing_title = serializers.CharField(source='listing.title', read_only=True, allow_null=True)
     order_id = serializers.IntegerField(source='order.id', read_only=True)
-    
+    verified_purchase = serializers.SerializerMethodField()
+
     media = ReviewMediaSerializer(many=True, read_only=True)
-    
+
     class Meta:
         model = Review
         fields = [
             'id', 'order', 'order_id', 'seller', 'seller_name', 'buyer', 'buyer_name', 'buyer_email',
             'listing', 'listing_title', 'rating', 'comment', 'seller_reply',
-            'is_flagged', 'is_hidden', 'is_approved', 'media', 'created_at', 'updated_at'
+            'is_flagged', 'is_hidden', 'is_approved', 'media', 'created_at', 'updated_at',
+            'verified_purchase',
         ]
         read_only_fields = [
             'id', 'order', 'seller', 'buyer', 'listing', 'is_flagged', 'is_hidden', 
-            'is_approved', 'created_at', 'updated_at'
+            'is_approved', 'created_at', 'updated_at', 'verified_purchase',
         ]
+
+    def get_verified_purchase(self, obj):
+        return bool(getattr(obj, 'order_id', None))
 
 class CreateReviewSerializer(serializers.ModelSerializer):
     """Serializer for creating a review from an order."""
@@ -208,16 +229,21 @@ class CreateReviewSerializer(serializers.ModelSerializer):
         if order.buyer != buyer:
             raise serializers.ValidationError("You can only review orders you purchased.")
         
-        # Check order status
-        if order.status != 'delivered':
-            raise serializers.ValidationError("Order must be in 'delivered' status to leave a review.")
-        
-        # Check escrow status
-        if not hasattr(order, 'escrow'):
+        if order.status not in ('delivered', 'completed'):
+            raise serializers.ValidationError(
+                "Order must be delivered or completed to leave a review."
+            )
+
+        from escrow_engine.models import Transaction
+        from escrow_engine.state_machine import TransactionStatus
+
+        txn = Transaction.objects.filter(linked_order=order).first()
+        if not txn:
             raise serializers.ValidationError("Order must have an escrow transaction.")
-        
-        if order.escrow.status != 'released':
-            raise serializers.ValidationError("Order escrow must be 'released' to leave a review.")
+        if txn.status != TransactionStatus.RELEASED:
+            raise serializers.ValidationError(
+                "Order escrow must be released to leave a review."
+            )
         
         # Check if review already exists
         if Review.objects.filter(order=order).exists():

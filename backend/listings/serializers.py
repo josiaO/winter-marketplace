@@ -264,12 +264,15 @@ class ListingDetailSerializer(ListingSerializer):
     similar_listings = serializers.SerializerMethodField()
     featured_listings = serializers.SerializerMethodField()
     attribute_values = serializers.SerializerMethodField()
+    seller_trust = serializers.SerializerMethodField()
+    price_fairness = serializers.SerializerMethodField()
 
     class Meta(ListingSerializer.Meta):
         fields = ListingSerializer.Meta.fields + [
             'parent_category', 'parent_category_name', 'latitude', 'longitude',
             'listing_verified', 'seller_profile', 'seller_status_message',
             'similar_listings', 'featured_listings', 'attribute_values',
+            'seller_trust', 'price_fairness',
         ]
 
     @extend_schema_field(serializers.BooleanField())
@@ -381,6 +384,25 @@ class ListingDetailSerializer(ListingSerializer):
     @extend_schema_field(serializers.ListField(child=serializers.DictField()))
     def get_featured_listings(self, obj):
         return [] # Simplified for now
+
+    @extend_schema_field(serializers.DictField())
+    def get_seller_trust(self, obj):
+        try:
+            from commerce.services.buyer_trust import build_seller_trust_block
+
+            return build_seller_trust_block(obj)
+        except Exception:
+            logger.debug('seller_trust for listing %s failed', getattr(obj, 'pk', None), exc_info=True)
+            return {}
+
+    @extend_schema_field(serializers.DictField())
+    def get_price_fairness(self, obj):
+        try:
+            from marketplace.services.marketplace_service import compute_price_fairness
+
+            return compute_price_fairness(obj)
+        except Exception:
+            return {'indicator': 'none', 'category_average': None, 'pct_vs_average': None}
 
 class ListingLikeSerializer(serializers.ModelSerializer):
     class Meta:

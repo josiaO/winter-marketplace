@@ -129,3 +129,49 @@ class PriceAnomalyService:
             )
 
         return None
+
+
+def compute_price_fairness(listing) -> dict:
+    """
+    Buyer-facing price position vs category average (inform-only; does not persist).
+    Uses the same category cohort as PriceAnomalyService.
+    """
+    out = {
+        'indicator': 'none',
+        'category_average': None,
+        'pct_vs_average': None,
+    }
+    if not listing.category_id or listing.is_ghost_listing:
+        return out
+    try:
+        price = listing.price
+        if price is None:
+            return out
+        similar = Listing.objects.filter(
+            category_id=listing.category_id,
+            is_published=True,
+            status='active',
+        ).exclude(id=listing.id)
+        avg_price = similar.aggregate(avg=Avg('price'))['avg']
+        if not avg_price:
+            return out
+        avg_price = Decimal(str(avg_price))
+        if avg_price <= 0:
+            return out
+        diff_pct = float((price - avg_price) / avg_price * 100)
+        out['category_average'] = float(avg_price)
+        out['pct_vs_average'] = round(diff_pct, 1)
+        # 50%+ below average → strongest caution
+        if price <= avg_price * Decimal('0.5'):
+            out['indicator'] = 'unusual_low'
+        # 20%+ below (price <= 80% of average)
+        elif price <= avg_price * Decimal('0.8'):
+            out['indicator'] = 'below_average'
+        # 30%+ above
+        elif price >= avg_price * Decimal('1.3'):
+            out['indicator'] = 'above_average'
+        else:
+            out['indicator'] = 'none'
+        return out
+    except Exception:
+        return out

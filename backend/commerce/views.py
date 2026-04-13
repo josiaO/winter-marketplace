@@ -5,16 +5,31 @@ from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from django.db.models import Sum, Count
 from rest_framework import viewsets, permissions, status
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.exceptions import NotFound, PermissionDenied, MethodNotAllowed, ValidationError
 from rest_framework.permissions import IsAdminUser
 
-from .models import Cart, CartItem, Order, Wishlist, WishlistItem, StockReservation
+from .models import (
+    Cart,
+    CartItem,
+    Order,
+    Wishlist,
+    WishlistItem,
+    StockReservation,
+    SellerWithdrawalRequest,
+    ListingOffer,
+)
 from .serializers import (
-    CartSerializer, OrderSerializer, WishlistSerializer, WishlistItemSerializer
+    CartSerializer,
+    OrderSerializer,
+    WishlistSerializer,
+    WishlistItemSerializer,
+    SellerWithdrawalRequestSerializer,
 )
 from listings.models import Listing
+from marketplace.models import SellerPaymentMethod
 from communications.notification_service import get_notification_service
 
 # Services
@@ -109,6 +124,19 @@ class CartViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
         payment_method = request.data.get('payment_method', 'mobile_money')
         payment_channel = request.data.get('payment_channel', payment_method)
+        offer_id = request.data.get('listing_offer_id') or request.data.get('offer_id')
+        offer_obj = None
+        if offer_id:
+            offer_obj = ListingOffer.objects.filter(
+                id=int(offer_id),
+                buyer=request.user,
+                status=ListingOffer.Status.ACCEPTED,
+            ).first()
+            if not offer_obj:
+                return Response(
+                    {'error': 'Invalid or expired accepted offer.'},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
         try:
             # Ensure: if we need online payment and initiation fails, the order is NOT created.
@@ -119,6 +147,7 @@ class CartViewSet(viewsets.ModelViewSet):
                     shipping_address=shipping_address,
                     shipping_method=shipping_method,
                     payment_method=payment_method,
+                    listing_offer=offer_obj,
                 )
 
                 # orders can be a single Order or a list of Orders
@@ -378,9 +407,16 @@ class OrderViewSet(viewsets.ModelViewSet):
             logger.warning(f"Permission denied for user {user.username} to ship order {order.id}")
             return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
             
-        if order.status not in ['pending', 'confirmed', 'processing']:
-            logger.warning(f"Invalid status for shipping: {order.status}")
-            return Response({'error': f'Cannot ship order in {order.status} status.'}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status not in ['confirmed', 'processing']:
+            return Response(
+                {
+                    'error': (
+                        f'Cannot ship order in {order.status} status. '
+                        'Ship only after the buyer has paid (order must be confirmed).'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
             
         try:
             OrderLifecycleManager.ship_order(
@@ -436,19 +472,43 @@ class OrderViewSet(viewsets.ModelViewSet):
                 {'error': f'Cannot open dispute for order in {order.status} status.'},
                 status=status.HTTP_400_BAD_REQUEST
             )
-        if order.status != 'arrived':
+        dispute_category = (request.data.get('dispute_category') or 'other').strip().lower()
+        allowed_cat = {
+            'never_arrived',
+            'not_as_described',
+            'damaged',
+            'seller_unresponsive',
+            'other',
+        }
+        if dispute_category not in allowed_cat:
+            dispute_category = 'other'
+        shipped_ok = {'never_arrived', 'seller_unresponsive'}
+        if order.status not in ('arrived', 'shipped'):
             return Response(
                 {
                     'error': (
-                        'Disputes can only be opened after the order is marked as arrived at your location. '
-                        f'Current status: {order.status}.'
+                        f'Disputes cannot be opened while the order is in {order.status} status.'
                     )
                 },
-                status=status.HTTP_400_BAD_REQUEST
+                status=status.HTTP_400_BAD_REQUEST,
             )
-        dispute_reason = request.data.get('dispute_reason', '').strip()
-        if not dispute_reason:
-            return Response({'error': 'Dispute reason is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        if order.status == 'shipped' and dispute_category not in shipped_ok:
+            return Response(
+                {
+                    'error': (
+                        'While the order is in transit you can open a dispute only for '
+                        '"Item never arrived" or "Seller is unresponsive".'
+                    )
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        dispute_reason = (request.data.get('dispute_reason') or '').strip()
+        dispute_reason_full = f'[{dispute_category}] {dispute_reason}'.strip()
+        if len(dispute_reason_full) < 8:
+            return Response(
+                {'error': 'Please add a short explanation or pick a reason so we can help you faster.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
             validate_commerce_upload_files(
@@ -460,7 +520,12 @@ class OrderViewSet(viewsets.ModelViewSet):
         
         # Centralized Dispute Opening
         try:
-            OrderLifecycleManager.open_dispute(order, actor=user, reason=dispute_reason)
+            OrderLifecycleManager.open_dispute(
+                order,
+                actor=user,
+                reason=dispute_reason_full,
+                dispute_category=dispute_category,
+            )
             order.refresh_from_db()
             
             # Handle additional evidence files for the engine dispute
@@ -681,14 +746,19 @@ class OrderViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=True, methods=['post'])
+    @action(
+        detail=True,
+        methods=['post'],
+        parser_classes=[MultiPartParser, FormParser, JSONParser],
+    )
     def review(self, request, pk=None):
         order = self.get_object()
         user = request.user
         try:
             rating = request.data.get('rating')
             comment = request.data.get('comment', '')
-            review_data = create_order_review(order, user, rating, comment)
+            files = request.FILES.getlist('images') or request.FILES.getlist('media')
+            review_data = create_order_review(order, user, rating, comment, media_files=files or None)
             return Response(review_data, status=status.HTTP_201_CREATED)
         except PermissionDenied as e:
             return Response({'error': str(e)}, status=status.HTTP_403_FORBIDDEN)
@@ -708,6 +778,89 @@ class OrderViewSet(viewsets.ModelViewSet):
         
         stats_data = get_seller_stats(user)
         return Response(stats_data)
+
+    def _seller_portal_user(self, user) -> bool:
+        return bool(
+            user.is_superuser
+            or user.groups.filter(name__in=['seller', 'agent']).exists()
+            or Listing.objects.filter(owner=user).exists()
+        )
+
+    @action(detail=False, methods=['post'], url_path='request-withdrawal')
+    def request_withdrawal(self, request):
+        """
+        Record a seller withdrawal request against released escrow (available_for_withdrawal).
+        Payout is processed by operations / existing payout pipeline — not instant from this endpoint.
+        """
+        user = request.user
+        if not self._seller_portal_user(user):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+
+        sp = getattr(user, 'seller_profile', None)
+        if not sp:
+            return Response(
+                {'error': 'Complete your seller profile before requesting a withdrawal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            amt = Decimal(str(request.data.get('amount', '')).strip())
+        except Exception:
+            return Response({'error': 'Invalid amount.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if amt <= 0:
+            return Response({'error': 'Amount must be positive.'}, status=status.HTTP_400_BAD_REQUEST)
+
+        stats = get_seller_stats(user)
+        available = Decimal(str(stats['escrow']['available_for_withdrawal']))
+        if amt > available:
+            return Response(
+                {'error': 'Amount exceeds available balance for withdrawal.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        payout_method_id = request.data.get('payout_method_id')
+        try:
+            pm = SellerPaymentMethod.objects.get(
+                pk=int(payout_method_id),
+                seller=sp,
+                is_active=True,
+            )
+        except (TypeError, ValueError, SellerPaymentMethod.DoesNotExist):
+            return Response(
+                {'error': 'Invalid or inactive payout method.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if SellerWithdrawalRequest.objects.filter(
+            seller=user,
+            status=SellerWithdrawalRequest.Status.PENDING,
+        ).exists():
+            return Response(
+                {'error': 'You already have a pending withdrawal request.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        seller_note = str(request.data.get('seller_note', '') or '')[:500]
+        row = SellerWithdrawalRequest.objects.create(
+            seller=user,
+            amount=amt,
+            currency='TZS',
+            payout_method=pm,
+            seller_note=seller_note,
+        )
+        return Response(
+            SellerWithdrawalRequestSerializer(row).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @action(detail=False, methods=['get'], url_path='withdrawal-requests')
+    def withdrawal_requests(self, request):
+        user = request.user
+        if not self._seller_portal_user(user):
+            return Response({'error': 'Permission denied'}, status=status.HTTP_403_FORBIDDEN)
+        qs = SellerWithdrawalRequest.objects.filter(seller=user).order_by('-created_at')[:50]
+        return Response(SellerWithdrawalRequestSerializer(qs, many=True).data)
 
     @action(detail=False, methods=['get'])
     def seller_escrow(self, request):

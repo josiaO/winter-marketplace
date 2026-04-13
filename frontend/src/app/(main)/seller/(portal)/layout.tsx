@@ -4,7 +4,7 @@ import { RoleGuard } from '@/components/smartdalali/role-guard';
 import { SellerSidebar } from '@/components/smartdalali/seller-sidebar';
 import { Menu } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
 import { useState } from 'react';
 
 export default function SellerPortalLayout({
@@ -32,6 +32,9 @@ export default function SellerPortalLayout({
                 </Button>
               </SheetTrigger>
               <SheetContent side="left" className="p-0 w-64 border-r-0">
+                <SheetHeader className="sr-only">
+                  <SheetTitle>Seller navigation</SheetTitle>
+                </SheetHeader>
                 <SellerSidebar />
               </SheetContent>
             </Sheet>

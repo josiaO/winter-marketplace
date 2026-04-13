@@ -43,6 +43,9 @@ export const routes = {
   order: (id: string) => `/orders/${encodeURIComponent(id)}`,
   wishlist: () => '/wishlist',
 
+  /** Guest / one-off escrow payment (WhatsApp link) */
+  pay: (token: string) => `/pay/${encodeURIComponent(token)}`,
+
   messages: () => '/messages',
   messageThread: (conversationId: string) =>
     `/messages/${encodeURIComponent(conversationId)}`,
@@ -58,6 +61,12 @@ export const routes = {
   sellerListingEdit: (id: string) =>
     `/seller/listings/${encodeURIComponent(id)}/edit`,
   sellerOrders: () => '/seller/orders',
+  sellerOrder: (id: string) => `/seller/orders/${encodeURIComponent(id)}`,
+  sellerOrderDispute: (id: string) => `/seller/orders/${encodeURIComponent(id)}/dispute`,
+  sellerWallet: () => '/seller/wallet',
+  sellerWalletWithdraw: () => '/seller/wallet/withdraw',
+  sellerAnalytics: () => '/seller/analytics',
+  sellerReviews: () => '/seller/reviews',
   sellerPayouts: () => '/seller/payouts',
   sellerEscrow: () => '/seller/escrow',
   sellerVerification: () => '/seller/verification',
@@ -100,6 +109,7 @@ export type TopLevelNavKey =
   | 'checkout'
   | 'account'
   | 'wishlist'
+  | 'pay'
   | 'notifications'
   | 'support'
   | 'forgot-password'
@@ -145,6 +155,8 @@ export function topLevelNavFromPathname(pathname: string): TopLevelNavKey {
       return 'account';
     case 'wishlist':
       return 'wishlist';
+    case 'pay':
+      return 'pay';
     case 'notifications':
       return 'notifications';
     case 'support':

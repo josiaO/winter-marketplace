@@ -406,11 +406,18 @@ class BusinessVerificationSubmitView(APIView):
         sp = _seller_profile(request)
         progress, _ = SellerOnboardingProgress.objects.get_or_create(seller=sp)
 
-        if not (
-            sp.total_sales >= Decimal('500000') or sp.completed_orders >= 20
-        ):
+        required_sales = Decimal('500000')
+        required_orders = 20
+        if not (sp.total_sales >= required_sales or sp.completed_orders >= required_orders):
             return Response(
-                {'error': 'Business upgrade is not available yet.'},
+                {
+                    'error': 'Business upgrade is not available yet.',
+                    'code': 'business_upgrade_not_available',
+                    'required_total_sales_tzs': str(required_sales),
+                    'required_completed_orders': required_orders,
+                    'current_total_sales_tzs': str(sp.total_sales),
+                    'current_completed_orders': sp.completed_orders,
+                },
                 status=status.HTTP_403_FORBIDDEN,
             )
 

@@ -18,6 +18,24 @@ export function formatTZS(amount: number | string | null | undefined): string {
   return `TZS ${n.toLocaleString('en-TZ')}`;
 }
 
+/**
+ * Next.js Image optimizer blocks upstreams that resolve to private IPs (e.g. localhost -> 127.0.0.1).
+ * In dev we already rewrite `/media/*` to Django, so prefer same-origin paths for media.
+ */
+export function normalizeMediaUrl(url: string | null | undefined): string | null | undefined {
+  if (!url) return url;
+  if (url.startsWith('/media/')) return url;
+
+  // Convert Django dev absolute URLs to same-origin paths
+  const devHosts = ['http://localhost:8000', 'http://127.0.0.1:8000'];
+  for (const host of devHosts) {
+    if (url.startsWith(`${host}/media/`)) {
+      return url.replace(host, '');
+    }
+  }
+  return url;
+}
+
 /** Shape of order line items from Django OrderItemSerializer (+ optional legacy flat fields). */
 export type CommerceOrderItemLike = {
   listing_title?: string;
@@ -172,7 +190,7 @@ export function truncateText(text: string, maxLength: number): string {
 /**
  * Get relative time string (e.g. "2 hours ago")
  */
-export function getRelativeTime(dateString: string): string {
+export function getRelativeTime(dateString: string, style: 'short' | 'long' = 'short'): string {
   const now = new Date();
   const date = new Date(dateString);
   const diffMs = now.getTime() - date.getTime();
@@ -182,6 +200,16 @@ export function getRelativeTime(dateString: string): string {
   const diffDays = Math.floor(diffHours / 24);
   const diffWeeks = Math.floor(diffDays / 7);
   const diffMonths = Math.floor(diffDays / 30);
+
+  if (style === 'long') {
+    if (diffSeconds < 60) return 'Just now';
+    if (diffMinutes < 60) return `${diffMinutes} minute${diffMinutes === 1 ? '' : 's'} ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours === 1 ? '' : 's'} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays === 1 ? '' : 's'} ago`;
+    if (diffWeeks < 4) return `${diffWeeks} week${diffWeeks === 1 ? '' : 's'} ago`;
+    if (diffMonths < 12) return `${diffMonths} month${diffMonths === 1 ? '' : 's'} ago`;
+    return formatDate(dateString);
+  }
 
   if (diffSeconds < 60) return 'Just now';
   if (diffMinutes < 60) return `${diffMinutes}m ago`;

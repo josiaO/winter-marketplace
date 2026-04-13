@@ -41,6 +41,7 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { OrderStatusBadge } from '@/components/smartdalali/order-status-badge';
+import { EscrowBuyerProgress } from '@/components/smartdalali/escrow-buyer-progress';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import {
@@ -149,6 +150,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   const [cancelReason, setCancelReason] = useState('');
   
   const [disputeDialogOpen, setDisputeDialogOpen] = useState(false);
+  const [disputeCategory, setDisputeCategory] = useState('other');
   const [disputeReason, setDisputeReason] = useState('');
   const [evidenceImages, setEvidenceImages] = useState<File[]>([]);
   const [evidenceVideo, setEvidenceVideo] = useState<File | null>(null);
@@ -238,6 +240,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
     setIsDisputing(true);
     try {
       await api.commerce.openDispute(order.id, {
+        dispute_category: disputeCategory,
         dispute_reason: disputeReason.trim(),
         evidence_images: evidenceImages.length > 0 ? evidenceImages : undefined,
         evidence_video: evidenceVideo || undefined,
@@ -245,6 +248,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       toast.success('Dispute opened successfully. Support will investigate.');
       setDisputeDialogOpen(false);
       setDisputeReason('');
+      setDisputeCategory('other');
       setEvidenceImages([]);
       setEvidenceVideo(null);
       fetchOrder();
@@ -355,6 +359,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             )}
           </CardContent>
         </Card>
+        <EscrowBuyerProgress order={order} />
 
         {/* Action Buttons */}
         <div className="flex flex-col sm:flex-row flex-wrap gap-3">
@@ -410,7 +415,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
         )}
         
         {/* Buyer: Open Dispute when Arrived */}
-        {order.status === 'arrived' && order.buyer?.id === user?.id && (
+        {(order.status === 'arrived' || order.status === 'shipped') && order.buyer?.id === user?.id && (
           <Button
             variant="outline"
             className="rounded-xl border-orange-500 text-orange-600 hover:bg-orange-50"
@@ -668,17 +673,41 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               Open a Dispute
             </DialogTitle>
             <DialogDescription>
-              Something wrong with your order? Provide details and evidence below.
-              Escrow funds will be held until resolved.
+              We review every dispute with real people and aim to resolve within 7 days.
             </DialogDescription>
           </DialogHeader>
           
           <div className="space-y-4 py-2">
             <div className="space-y-2">
-              <Label htmlFor="dispute-reason">Reason for dispute</Label>
+              <Label>What went wrong?</Label>
+              <div className="grid grid-cols-1 gap-2">
+                {[
+                  ['never_arrived', 'Item never arrived'],
+                  ['not_as_described', 'Item is different from description'],
+                  ['damaged', 'Item arrived damaged'],
+                  ['seller_unresponsive', 'Seller is unresponsive'],
+                  ['other', 'Other'],
+                ].map(([key, title]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    className={`w-full rounded-lg border px-3 py-2 text-left text-sm transition ${
+                      disputeCategory === key
+                        ? 'border-primary bg-primary/5 text-foreground'
+                        : 'border-muted-foreground/20 text-muted-foreground hover:text-foreground'
+                    }`}
+                    onClick={() => setDisputeCategory(key)}
+                  >
+                    {title}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dispute-reason">Your explanation</Label>
               <Textarea
                 id="dispute-reason"
-                placeholder="Describe the issue (e.g. damaged item, wrong product)..."
+                placeholder="Share any details that help us resolve this fairly..."
                 value={disputeReason}
                 onChange={(e) => setDisputeReason(e.target.value)}
                 rows={4}
@@ -697,7 +726,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             </div>
 
             <div className="space-y-2">
-              <Label>Video Evidence (Optional)</Label>
+              <Label>Short Video Evidence (Optional)</Label>
               <Input
                 type="file"
                 accept="video/*"
@@ -709,8 +738,8 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground flex gap-2">
               <ShieldCheck className="w-4 h-4 shrink-0 text-orange-500" />
               <p>
-                Our team will review the evidence from both you and the seller.
-                Evidence helps us resolve disputes faster.
+                Every dispute is reviewed by a real person. If we rule in your favor,
+                your refund is processed within 24 hours.
               </p>
             </div>
           </div>

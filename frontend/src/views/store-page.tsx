@@ -13,6 +13,8 @@ import {
   Users,
   ShoppingBag,
   MapPin,
+  LayoutGrid,
+  List,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -29,15 +31,16 @@ import {
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
 import { EmptyState } from '@/components/smartdalali/empty-state';
-import { useAuthStore } from '@/store';
+import { useAuthStore, useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
-import { formatDate } from '@/lib/helpers';
+import { formatDate, normalizeMediaUrl } from '@/lib/helpers';
 import { toast } from 'sonner';
 import type { Listing, Store as StoreType } from '@/types/api';
 
 export function StorePage({ storeSlug }: { storeSlug: string }) {
   const router = useRouter();
   const { isAuthenticated } = useAuthStore();
+  const { browseLayout, browseDensity, setBrowseLayout } = useUIStore();
   const slug = storeSlug;
 
   const [store, setStore] = useState<StoreType | null>(null);
@@ -170,7 +173,7 @@ export function StorePage({ storeSlug }: { storeSlug: string }) {
         {store.cover && (
           <div className="relative w-full h-40 sm:h-56 rounded-2xl overflow-hidden bg-muted mb-4">
             <Image
-              src={store.cover}
+              src={normalizeMediaUrl(store.cover) || store.cover}
               alt={`${store.name} cover`}
               fill
               className="object-cover"
@@ -258,7 +261,29 @@ export function StorePage({ storeSlug }: { storeSlug: string }) {
       <section>
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">Store Products</h2>
-          <span className="text-sm text-muted-foreground">{totalCount} items</span>
+          <div className="flex items-center gap-2">
+            <span className="hidden sm:inline text-sm text-muted-foreground">{totalCount} items</span>
+            <div className="flex items-center rounded-full border bg-muted/30 p-1">
+              <Button
+                type="button"
+                variant={browseLayout === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-8 rounded-full px-3"
+                onClick={() => setBrowseLayout('grid')}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                variant={browseLayout === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-8 rounded-full px-3"
+                onClick={() => setBrowseLayout('list')}
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+          </div>
         </div>
 
         {listings.length === 0 && !isLoading ? (
@@ -269,11 +294,17 @@ export function StorePage({ storeSlug }: { storeSlug: string }) {
             actionLabel="Browse Marketplace"
             onAction={() => router.push(routes.home())}
           />
-        ) : (
+        ) : browseLayout === 'grid' ? (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
               {listings.map((listing) => (
-                <ProductCard key={listing.id} listing={listing} onSelect={handleProductSelect} />
+                <ProductCard
+                  key={listing.id}
+                  listing={listing}
+                  onSelect={handleProductSelect}
+                  density={browseDensity}
+                  showCartControls={browseDensity !== 'compact'}
+                />
               ))}
             </div>
 
@@ -289,6 +320,43 @@ export function StorePage({ storeSlug }: { storeSlug: string }) {
               </div>
             )}
           </>
+        ) : (
+          <div className="space-y-2">
+            {listings.map((listing) => (
+              <button
+                key={listing.id}
+                type="button"
+                className="w-full rounded-xl border bg-card p-3 text-left hover:bg-muted/20"
+                onClick={() => handleProductSelect(listing)}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden flex-shrink-0 relative">
+                    {(listing.images?.[0] as any)?.image ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={(listing.images?.[0] as any)?.image}
+                        alt={listing.title}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="w-5 h-5 text-muted-foreground/30" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{listing.title}</p>
+                    <p className="text-xs text-muted-foreground truncate">{listing.city || ''}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                      {listing.price ? `TZS ${Number(listing.price).toLocaleString('en-TZ')}` : 'TZS —'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
         )}
       </section>
     </div>

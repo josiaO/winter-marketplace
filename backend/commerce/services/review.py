@@ -10,11 +10,13 @@ from rest_framework.exceptions import ValidationError, PermissionDenied
 from commerce.models import Order
 from escrow_engine.state_machine import TransactionStatus
 from trust.serializers import CreateReviewSerializer, ReviewSerializer
+from trust.models import ReviewMedia
 from trust.services import update_seller_rating
+from commerce.seller_notifications import notify_seller_new_review
 
 logger = logging.getLogger(__name__)
 
-def create_order_review(order: Order, user, rating, comment=''):
+def create_order_review(order: Order, user, rating, comment='', media_files=None):
     """
     Create a review for an order and update the seller's rating.
     
@@ -66,9 +68,20 @@ def create_order_review(order: Order, user, rating, comment=''):
         raise ValidationError(serializer.errors)
     
     review = serializer.save()
-    
+
+    if media_files:
+        for f in media_files:
+            ReviewMedia.objects.create(review=review, file=f, media_type='image')
+
     # 6. Update seller rating
     update_seller_rating(order.seller)
+
+    first_item = order.items.select_related('listing').first()
+    listing_id = first_item.listing_id if first_item else None
+    try:
+        notify_seller_new_review(order.seller, user, int(rating), listing_id)
+    except Exception:
+        logger.exception('notify_seller_new_review failed order=%s', order.id)
     
     # 7. Return serialized review data
     review.refresh_from_db()

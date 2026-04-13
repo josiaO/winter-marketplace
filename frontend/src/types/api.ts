@@ -129,7 +129,7 @@ export interface OtpVerifyPayload {
 
 export type ListingCondition = 'new' | 'used' | 'refurbished';
 export type ListingStatus = 'published' | 'draft' | 'archived';
-export type ListingType = 'product' | 'service';
+export type ListingType = 'product' | 'service' | 'sale' | 'rent';
 export type Currency = 'TZS' | 'USD' | 'KES' | 'UGX';
 
 export interface ListingImage {
@@ -176,6 +176,43 @@ export interface ListingAttributeValueRow {
   value: string | number | boolean | null;
 }
 
+export type PriceFairnessIndicator = 'none' | 'below_average' | 'above_average' | 'unusual_low';
+
+export interface PriceFairness {
+  indicator: PriceFairnessIndicator;
+  category_average: number | null;
+  pct_vs_average: number | null;
+}
+
+export interface SellerTrustReviewPreview {
+  id: number;
+  rating: number;
+  buyer_display: string;
+  created_at: string;
+  comment: string;
+  seller_reply: string;
+  verified_purchase: boolean;
+  variant_summary: string | null;
+  media_urls: string[];
+}
+
+export interface SellerTrustBlock {
+  seller_name: string | null;
+  store_name: string | null;
+  seller_verified_badge: boolean;
+  identity_verified: boolean;
+  completion_rate_pct: number | null;
+  completion_bar_tier: string;
+  last_shipped_text: string | null;
+  last_shipped_stale: boolean;
+  joined_text: string | null;
+  response_time_text: string | null;
+  completed_orders_count: number;
+  seller_tier_label: string;
+  reviews_preview: SellerTrustReviewPreview[];
+  reviews_total: number;
+}
+
 export interface Listing {
   id: number;
   title: string;
@@ -205,6 +242,10 @@ export interface Listing {
   delivery_fee?: string | number | null;
   created_at: string;
   updated_at: string;
+  seller_trust?: SellerTrustBlock;
+  price_fairness?: PriceFairness;
+  seller_profile?: Record<string, unknown>;
+  seller_status_message?: string | null;
 }
 
 export interface CreateListingPayload {
@@ -216,12 +257,53 @@ export interface CreateListingPayload {
   category: number;
   city?: string;
   location?: string;
+  address?: string;
   listing_type?: ListingType;
+  status?: ListingStatus | string;
+  is_published?: boolean;
   images?: File[];
   attributes?: Record<string, unknown>;
   specs?: Record<string, unknown>;
   delivery_is_free?: boolean;
   delivery_fee?: number | null;
+  track_inventory?: boolean;
+  stock_quantity?: number;
+  low_stock_threshold?: number;
+  allow_backorders?: boolean;
+}
+
+/** GET /commerce/orders/seller_stats/ */
+export interface CommerceSellerStats {
+  orders: {
+    new: number;
+    awaiting_shipment: number;
+    shipped: number;
+    delivered: number;
+    disputed: number;
+    cancelled: number;
+    total: number;
+  };
+  revenue: {
+    today: number;
+    this_month: number;
+    last_month: number;
+    total: number;
+    net_earnings: number;
+    platform_fees_paid: number;
+  };
+  escrow: {
+    held: number;
+    released: number;
+    disputed: number;
+    available_for_withdrawal: number;
+  };
+  payouts: {
+    pending: number;
+    completed: number;
+  };
+  policy?: {
+    auto_confirm_receipt_days: number;
+  };
 }
 
 export interface UpdateListingPayload extends Partial<CreateListingPayload> {
@@ -378,6 +460,9 @@ export interface Order {
   payment_method: PaymentMethod;
   payment_channel: PaymentChannel | null;
   tracking_number: string | null;
+  confirmed_at?: string | null;
+  processing_at?: string | null;
+  shipped_at?: string | null;
   dispute: Dispute | null;
   /** Django `OrderSerializer.get_escrow` — engine transaction snapshot (status is uppercase, e.g. HOLD). */
   escrow?: {
@@ -411,6 +496,8 @@ export interface CheckoutPayload {
   shipping_method: ShippingMethod;
   payment_method: PaymentMethod;
   payment_channel?: PaymentChannel;
+  /** Accepted listing offer — checkout uses negotiated line price */
+  listing_offer_id?: number;
 }
 
 /** POST /commerce/orders/confirm-payment-return/ */
@@ -477,17 +564,20 @@ export interface Payout {
 export interface Review {
   id: number;
   listing: number | Listing;
-  reviewer: {
+  reviewer?: {
     id: number;
     username: string;
     first_name: string;
     last_name: string;
     avatar: string | null;
   };
+  buyer_name?: string;
   rating: number;
   comment: string;
   seller_reply: string | null;
   created_at: string;
+  media?: Array<{ id: number; file?: string; file_url?: string; media_type?: string }>;
+  verified_purchase?: boolean;
 }
 
 export interface CreateReviewPayload {
@@ -563,6 +653,15 @@ export interface ConversationParticipant {
 export interface Conversation {
   id: number;
   participants: ConversationParticipant[];
+  /** API convenience fields (backend ConversationSerializer) */
+  other_participant?: ConversationParticipant | null;
+  participant_name?: string;
+  participant_avatar?: string | null;
+  listing_id?: number | null;
+  listing_title?: string | null;
+  listing_image?: string | null;
+  listing_summary?: Record<string, unknown> | null;
+  order_id?: number | null;
   last_message: {
     id: number;
     text: string;
@@ -663,8 +762,34 @@ export interface CreateDisputePayload {
   order: number;
   reason: DisputeReason;
   description?: string;
+  dispute_category?: string;
+  dispute_reason?: string;
   evidence_video?: File;
   evidence_images?: File[];
+}
+
+export interface ListingOffer {
+  id: number;
+  listing: number;
+  listing_title?: string;
+  buyer: number;
+  seller: number;
+  status: string;
+  listed_price: string | number;
+  current_amount: string | number;
+  buyer_note?: string;
+  seller_note?: string;
+  last_actor?: string;
+  counter_round: number;
+  accepted_until?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CreateListingOfferPayload {
+  listing_id: number;
+  amount: number;
+  note?: string;
 }
 
 export interface ResolveDisputePayload {
@@ -832,25 +957,12 @@ export class ApiClientError extends Error {
   }
 }
 
-export type SupportRequestStatus = 'pending' | 'in_progress' | 'resolved' | 'closed';
-
-export interface SupportRequest {
-  id: number;
-  user: number;
-  subject: string;
-  message: string;
-  status: SupportRequestStatus;
-  admin_notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface CreateSupportRequestPayload {
   subject: string;
   message: string;
 }
 
 export interface UpdateSupportRequestPayload {
-  status?: SupportRequestStatus;
+  status?: 'open' | 'in_progress' | 'resolved' | 'closed';
   admin_notes?: string;
 }

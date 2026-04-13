@@ -165,11 +165,11 @@ function InboxView() {
                       </div>
 
                       {/* Listing context */}
-                      {conversation.listing && (
+                      {(conversation.listing_title || conversation.listing?.title) && (
                         <div className="flex items-center gap-1.5 mt-0.5">
                           <Package className="w-3 h-3 text-muted-foreground" />
                           <span className="text-xs text-muted-foreground truncate">
-                            {conversation.listing.title}
+                            {conversation.listing_title || conversation.listing?.title}
                           </span>
                         </div>
                       )}

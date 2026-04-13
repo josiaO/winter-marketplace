@@ -9,6 +9,7 @@ import {
   Package,
   ChevronRight,
   ClipboardList,
+  RotateCcw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +39,7 @@ export function OrdersPage() {
   const [orders, setOrders] = useState<DjangoOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
+  const [buyAgainOrderId, setBuyAgainOrderId] = useState<number | null>(null);
 
   const fetchOrders = useCallback(async () => {
     if (!isAuthenticated) {
@@ -60,6 +62,70 @@ export function OrdersPage() {
   useEffect(() => {
     fetchOrders();
   }, [fetchOrders]);
+
+  const handleBuyAgain = useCallback(
+    async (e: React.MouseEvent, order: DjangoOrder) => {
+      e.stopPropagation();
+      if (!order.items.length) {
+        toast.error('This order has no items to reorder.');
+        return;
+      }
+      setBuyAgainOrderId(order.id);
+      try {
+        let added = 0;
+        let lastMessage = '';
+
+        for (const item of order.items) {
+          const listing: any = item.listing;
+          const listingId = listing?.id;
+          if (!listingId) {
+            const browse = window.confirm(
+              'This product is no longer available. Browse similar items?',
+            );
+            if (browse) {
+              router.push(routes.home());
+            }
+            continue;
+          }
+
+          const latest = await api.listings.detail(String(listingId));
+          const currentStock =
+            typeof latest.stock_quantity === 'number' ? latest.stock_quantity : undefined;
+
+          if (currentStock !== undefined && currentStock < 1) {
+            const notify = window.confirm(
+              'This item is currently out of stock. Notify me when available?',
+            );
+            if (notify) {
+              toast.success('We will remember this item in your wishlist for later.');
+            }
+            continue;
+          }
+
+          const qty = Number(item.quantity || 1);
+          await api.commerce.cartAddItem({ listing_id: listingId, quantity: qty });
+          added += 1;
+
+          const previousPrice = Number(item.price_at_time ?? latest.price ?? 0);
+          const currentPrice = Number(latest.price ?? 0);
+          if (currentPrice !== previousPrice) {
+            lastMessage = `Added to cart at current price: ${formatTZS(currentPrice)} (Price was ${formatTZS(previousPrice)} when you last bought)`;
+          } else {
+            lastMessage = `Added to cart at current price: ${formatTZS(currentPrice)}`;
+          }
+        }
+
+        if (added > 0) {
+          toast.success(lastMessage || 'Added to cart');
+        }
+      } catch {
+        toast.error('Could not buy this item again right now.');
+      } finally {
+        setBuyAgainOrderId(null);
+      }
+    },
+    [router],
+  );
 
   const filteredOrders =
     activeTab === 'all'
@@ -222,6 +288,29 @@ export function OrdersPage() {
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   </div>
+                  {order.status === 'completed' && (
+                    <div className="mt-4 flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="rounded-lg"
+                        onClick={(e) => void handleBuyAgain(e, order)}
+                        disabled={buyAgainOrderId === order.id}
+                      >
+                        {buyAgainOrderId === order.id ? (
+                          <span className="inline-flex items-center gap-2">
+                            <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                            Adding...
+                          </span>
+                        ) : (
+                          <>
+                            <RotateCcw className="w-4 h-4 mr-2" />
+                            Buy Again
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}

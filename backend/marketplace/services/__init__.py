@@ -5,6 +5,7 @@ commerce owns checkout, cart, and stock reservations — import from ``commerce.
 """
 from marketplace.services.marketplace_service import (
     PriceAnomalyService,
+    compute_price_fairness,
     normalize_specs,
     save_product_attribute_values,
     validate_attributes,
@@ -24,6 +25,7 @@ from marketplace.services.store_service import (
 
 __all__ = [
     'PriceAnomalyService',
+    'compute_price_fairness',
     'SellerService',
     'ensure_default_store_for_seller',
     'get_seller_review_stats',

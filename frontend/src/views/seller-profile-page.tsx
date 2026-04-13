@@ -340,9 +340,15 @@ export function SellerProfilePage({ sellerId }: { sellerId: string }) {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
               {listings.map((listing) => (
-                <ProductCard key={listing.id} listing={listing} onSelect={handleProductSelect} />
+                <ProductCard
+                  key={listing.id}
+                  listing={listing}
+                  onSelect={handleProductSelect}
+                  density="compact"
+                  showCartControls={false}
+                />
               ))}
             </div>
 

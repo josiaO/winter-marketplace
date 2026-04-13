@@ -5,9 +5,12 @@ Service for calculating seller statistics and financial summaries.
 Includes revenue, order counts, and escrow status.
 """
 import logging
+from datetime import timedelta
 from decimal import Decimal
-from django.utils import timezone
+
+from django.conf import settings
 from django.db.models import Sum, Count
+from django.utils import timezone
 from commerce.models import Order
 from escrow_engine.models import Transaction, TransactionStatus, Payout as EngPayout
 
@@ -27,7 +30,10 @@ def get_seller_stats(user):
     now = timezone.now()
     today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
     month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-    
+    prev_month_start = (month_start - timedelta(days=1)).replace(
+        day=1, hour=0, minute=0, second=0, microsecond=0
+    )
+
     seller_orders = Order.objects.filter(seller=user)
     
     # 1. Order counts by status
@@ -40,6 +46,10 @@ def get_seller_stats(user):
     total_revenue = delivered_orders.aggregate(Sum('subtotal'))['subtotal__sum'] or Decimal('0')
     revenue_today = delivered_orders.filter(updated_at__gte=today_start).aggregate(Sum('subtotal'))['subtotal__sum'] or Decimal('0')
     revenue_this_month = delivered_orders.filter(updated_at__gte=month_start).aggregate(Sum('subtotal'))['subtotal__sum'] or Decimal('0')
+    revenue_last_month = delivered_orders.filter(
+        updated_at__gte=prev_month_start,
+        updated_at__lt=month_start,
+    ).aggregate(Sum('subtotal'))['subtotal__sum'] or Decimal('0')
     
     # 3. Platform fees and net earnings
     total_platform_fees = delivered_orders.aggregate(Sum('platform_fee'))['platform_fee__sum'] or Decimal('0')
@@ -106,9 +116,13 @@ def get_seller_stats(user):
         'revenue': {
             'today': float(revenue_today),
             'this_month': float(revenue_this_month),
+            'last_month': float(revenue_last_month),
             'total': float(total_revenue),
             'net_earnings': float(net_earnings),
             'platform_fees_paid': float(total_platform_fees),
+        },
+        'policy': {
+            'auto_confirm_receipt_days': int(getattr(settings, 'AUTO_CONFIRM_RECEIPT_DAYS', 7)),
         },
         'escrow': {
             'held': float(escrow_stats['held']),

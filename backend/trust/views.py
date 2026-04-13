@@ -303,7 +303,10 @@ class ReviewViewSet(viewsets.ModelViewSet):
             queryset = queryset.filter(seller=self.request.user)
         elif seller_id:
             queryset = queryset.filter(seller_id=seller_id)
-        
+
+        listing_filter = self.request.query_params.get('listing')
+        if listing_filter:
+            return queryset.annotate(_media_n=Count('media')).order_by('-_media_n', '-created_at')
         return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):

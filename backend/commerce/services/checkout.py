@@ -10,7 +10,7 @@ from decimal import Decimal
 from django.db import transaction
 from django.utils import timezone as dj_tz
 
-from commerce.models import Order, OrderItem, StockReservation
+from commerce.models import Order, OrderItem, StockReservation, ListingOffer
 from commerce.services.inventory import InventoryService
 from commerce.services.lifecycle import OrderLifecycleManager
 from commerce.services.shipping_rates import shipping_cost_for_method
@@ -103,9 +103,22 @@ class OrderService:
         shipping_address,
         shipping_method='standard',
         payment_method='mpesa',
+        *,
+        listing_offer=None,
     ):
         if not cart.items.exists():
             raise ValueError('Cart is empty')
+
+        if listing_offer is not None:
+            if listing_offer.buyer_id != cart.user.id:
+                raise ValueError('This offer does not belong to you.')
+            if listing_offer.status != ListingOffer.Status.ACCEPTED:
+                raise ValueError('This offer is not in an accepted state.')
+            if not listing_offer.accepted_until or listing_offer.accepted_until < dj_tz.now():
+                raise ValueError('This accepted offer has expired. Ask the seller for a new price.')
+            cart_listing_ids = {int(x.listing_id) for x in cart.items.all()}
+            if int(listing_offer.listing_id) not in cart_listing_ids:
+                raise ValueError('Add the negotiated listing to your cart before checkout.')
 
         items_by_seller = {}
         for item in cart.items.select_related('listing', 'listing__owner'):
@@ -131,6 +144,21 @@ class OrderService:
                 )
 
             subtotal = sum(item.subtotal for item in items)
+            thread_offer = (
+                listing_offer
+                if listing_offer is not None and int(listing_offer.seller_id) == int(seller.id)
+                else None
+            )
+            if thread_offer is not None:
+                adj = Decimal('0')
+                for item in items:
+                    if int(item.listing_id) == int(thread_offer.listing_id):
+                        line = thread_offer.current_amount * Decimal(item.quantity)
+                        orig = item.subtotal
+                        adj += orig - line
+                subtotal = subtotal - adj
+                if subtotal < Decimal('0'):
+                    subtotal = Decimal('0')
             primary_listing = items[0].listing
             platform_fee = OrderService.calculate_platform_fee(
                 primary_listing,
@@ -240,11 +268,15 @@ class OrderService:
                         f'Available: {available}, Requested: {cart_item.quantity}'
                     )
 
+                unit_price = cart_item.price_at_time
+                if thread_offer is not None and int(cart_item.listing_id) == int(thread_offer.listing_id):
+                    unit_price = thread_offer.current_amount
+
                 OrderItem.objects.create(
                     order=order,
                     listing=cart_item.listing,
                     quantity=cart_item.quantity,
-                    price_at_time=cart_item.price_at_time,
+                    price_at_time=unit_price,
                 )
 
             from escrow_engine.models.transaction import TransactionSource
@@ -263,6 +295,10 @@ class OrderService:
             )
 
             orders.append(order)
+
+        if listing_offer is not None:
+            listing_offer.status = ListingOffer.Status.FULFILLED
+            listing_offer.save(update_fields=['status', 'updated_at'])
 
         cart.items.all().delete()
 

@@ -22,6 +22,13 @@ class Profile(models.Model):
     notification_orders = models.BooleanField(default=True)
     notification_promotions = models.BooleanField(default=False)
     notification_messages = models.BooleanField(default=True)
+    # Seller push (FCM): in-app copy + device notification language
+    seller_notification_language = models.CharField(
+        max_length=2,
+        choices=[('sw', 'Swahili'), ('en', 'English')],
+        default='sw',
+        help_text='Language for seller marketplace push notifications.',
+    )
 
     def __str__(self):
         return self.user.username

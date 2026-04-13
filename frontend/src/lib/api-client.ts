@@ -50,6 +50,8 @@ import type {
   ConfirmPaymentReturnPayload,
   ConfirmPaymentReturnResponse,
   CreateReviewPayload,
+  CreateListingOfferPayload,
+  ListingOffer,
   CreateReportPayload,
   CreateDisputePayload,
   ResolveDisputePayload,
@@ -302,8 +304,15 @@ class ApiClient {
   // Generic CRUD Helpers
   // ---------------------------------------------------------------------------
 
-  private get<T>(path: string, params?: Record<string, string | number | boolean | null | undefined>): Promise<T> {
-    return this.request<T>(`${path}${buildQueryString(params)}`);
+  private get<T>(
+    path: string,
+    params?: Record<string, string | number | boolean | null | undefined>,
+    reqOptions?: { skipAuth?: boolean },
+  ): Promise<T> {
+    return this.request<T>(`${path}${buildQueryString(params)}`, {
+      method: 'GET',
+      skipAuth: reqOptions?.skipAuth,
+    });
   }
 
   private post<T>(path: string, body?: unknown, options?: RequestInit & { skipAuth?: boolean }): Promise<T> {
@@ -522,6 +531,14 @@ class ApiClient {
     subcategories: (categoryId: number | string): Promise<PaginatedResponse<Category>> =>
       this.get(`/catalog/categories/${categoryId}/subcategories/`),
 
+    /** POST /catalog/categories/suggest-from-title/ (authenticated) */
+    suggestFromTitle: (payload: { title: string }): Promise<{
+      category_id: number | null;
+      parent_name: string | null;
+      category_name: string | null;
+      confidence: number;
+    }> => this.post('/catalog/categories/suggest-from-title/', payload),
+
     // -----------------------------------------------------------------------
     // Admin catalog management (requires admin/staff JWT)
     // -----------------------------------------------------------------------
@@ -703,9 +720,46 @@ class ApiClient {
       return this.post(`/commerce/orders/${id}/open_dispute/`, fd);
     },
 
-    /** POST /commerce/orders/:id/review/ */
-    reviewOrder: (id: number | string, payload: CreateReviewPayload): Promise<Review> =>
-      this.post(`/commerce/orders/${id}/review/`, payload),
+    /** POST /commerce/orders/:id/review/ (multipart when images provided) */
+    reviewOrder: (
+      id: number | string,
+      payload: { rating: number; comment?: string },
+      images?: File[],
+    ): Promise<Review> => {
+      if (images && images.length > 0) {
+        const fd = new FormData();
+        fd.append('rating', String(payload.rating));
+        fd.append('comment', payload.comment ?? '');
+        images.forEach((f) => fd.append('images', f));
+        return this.post(`/commerce/orders/${id}/review/`, fd);
+      }
+      return this.post(`/commerce/orders/${id}/review/`, payload);
+    },
+
+    /** GET /commerce/offers/ */
+    offers: (
+      params?: Record<string, string | number | boolean | null | undefined>,
+    ): Promise<PaginatedResponse<ListingOffer>> => this.get('/commerce/offers/', params),
+
+    /** GET /commerce/offers/active-count/ */
+    offersActiveCount: (): Promise<{ active_count: number; max: number }> =>
+      this.get('/commerce/offers/active-count/'),
+
+    /** POST /commerce/offers/ */
+    offersCreate: (payload: CreateListingOfferPayload): Promise<ListingOffer> =>
+      this.post('/commerce/offers/', payload),
+
+    /** POST /commerce/offers/:id/seller-respond/ */
+    offerSellerRespond: (
+      id: number | string,
+      body: { action: 'accept' | 'decline' | 'counter'; amount?: number; note?: string },
+    ): Promise<ListingOffer> => this.post(`/commerce/offers/${id}/seller-respond/`, body),
+
+    /** POST /commerce/offers/:id/buyer-respond/ */
+    offerBuyerRespond: (
+      id: number | string,
+      body: { action: 'accept' | 'decline' | 'counter'; amount?: number; note?: string },
+    ): Promise<ListingOffer> => this.post(`/commerce/offers/${id}/buyer-respond/`, body),
 
     /** GET /commerce/wishlist/ */
     wishlist: (): Promise<unknown> => this.get('/commerce/wishlist/'),
@@ -716,6 +770,17 @@ class ApiClient {
 
     /** GET /commerce/orders/seller_stats/ */
     sellerStats: (): Promise<unknown> => this.get('/commerce/orders/seller_stats/'),
+
+    /** POST /commerce/orders/request-withdrawal/ */
+    requestWithdrawal: (payload: {
+      amount: number | string;
+      payout_method_id: number | string;
+      seller_note?: string;
+    }): Promise<unknown> =>
+      this.post('/commerce/orders/request-withdrawal/', payload),
+
+    /** GET /commerce/orders/withdrawal-requests/ */
+    withdrawalRequests: (): Promise<unknown> => this.get('/commerce/orders/withdrawal-requests/'),
 
     /** GET /commerce/orders/seller_escrow/ */
     sellerEscrow: (): Promise<unknown> => this.get('/commerce/orders/seller_escrow/'),
@@ -925,6 +990,17 @@ class ApiClient {
     ): Promise<PaginatedResponse<Review>> =>
       this.get('/trust/reviews/', params),
 
+    /** GET /trust/reviews/listing_stats/?listing= */
+    listingReviewStats: (
+      listingId: string | number,
+    ): Promise<{
+      average_rating?: number;
+      total_reviews?: number;
+      recommend_percentage?: number | null;
+      verified_purchase_count?: number;
+      rating_distribution?: Record<number, number>;
+    }> => this.get('/trust/reviews/listing_stats/', { listing: listingId }),
+
     /** POST /trust/reports/ */
     createReport: (payload: CreateReportPayload): Promise<Report> =>
       this.post('/trust/reports/', payload),
@@ -1053,16 +1129,6 @@ class ApiClient {
     ): Promise<PaginatedResponse<Notification>> =>
       this.get('/communications/notifications/', params),
 
-    /** GET /communications/support-requests/ */
-    supportRequests: (
-      params?: Record<string, string | number | boolean | null | undefined>,
-    ): Promise<PaginatedResponse<SupportRequest>> =>
-      this.get('/communications/support-requests/', params),
-
-    /** POST /communications/support-requests/ */
-    createSupportRequest: (payload: CreateSupportRequestPayload): Promise<SupportRequest> =>
-      this.post('/communications/support-requests/', payload),
-
     /** GET /communications/support-requests/:id/ */
     supportRequestDetail: (id: number | string): Promise<SupportRequest> =>
       this.get(`/communications/support-requests/${id}/`),
@@ -1135,17 +1201,26 @@ class ApiClient {
     // Payment links live under /escrow/pay/links/*
     createPayLink: (payload: CreatePayLinkPayload): Promise<PayLink> =>
       this.post('/escrow/pay/links/', payload),
-    payLinkDetail: (token: string): Promise<PayLink> =>
-      this.get(`/escrow/pay/links/${token}/`),
-    payLinkRequestOtp: (token: string): Promise<{ message: string }> =>
-      this.post(`/escrow/pay/links/${token}/request-otp/`),
-    payLinkVerifyOtp: (token: string, payload: { code: string; purpose?: string }): Promise<{ message: string; verified?: boolean }> =>
-      this.post(`/escrow/pay/links/${token}/verify-otp/`, payload),
+    payLinkDetail: (token: string): Promise<Record<string, unknown>> =>
+      this.get<Record<string, unknown>>(`/escrow/pay/links/${token}/`, undefined, {
+        skipAuth: true,
+      }),
+    payLinkRequestOtp: (token: string, payload: { phone: string }): Promise<{ detail?: string }> =>
+      this.post(`/escrow/pay/links/${token}/request-otp/`, payload, { skipAuth: true }),
+    payLinkVerifyOtp: (
+      token: string,
+      payload: { phone: string; otp: string },
+    ): Promise<{ detail?: string }> =>
+      this.post(`/escrow/pay/links/${token}/verify-otp/`, payload, { skipAuth: true }),
     payLinkPay: (
       token: string,
       payload: { payment_method?: string; payment_channel?: string; buyer_phone?: string; buyer_name?: string; redirect_url?: string; cancel_url?: string }
-    ): Promise<{ payment_url?: string; success: boolean; error?: string }> =>
-      this.post(`/escrow/pay/links/${token}/pay/`, payload),
+    ): Promise<{
+      payment_url?: string;
+      success: boolean;
+      error?: string;
+      transaction_reference?: string;
+    }> => this.post(`/escrow/pay/links/${token}/pay/`, payload, { skipAuth: true }),
 
     /** GET /escrow/disputes/ */
     disputes: (

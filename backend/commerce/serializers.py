@@ -5,8 +5,17 @@ from django.conf import settings
 from rest_framework import serializers
 from drf_spectacular.utils import extend_schema_field
 from .models import (
-    Cart, CartItem, Order, OrderItem, OrderEvidence,
-    Delivery, StockReservation, Wishlist, WishlistItem
+    Cart,
+    CartItem,
+    Order,
+    OrderItem,
+    OrderEvidence,
+    Delivery,
+    StockReservation,
+    Wishlist,
+    WishlistItem,
+    SellerWithdrawalRequest,
+    ListingOffer,
 )
 from listings.serializers import ListingSerializer
 from accounts.serializers import UserSerializer
@@ -391,3 +400,75 @@ class WishlistSerializer(serializers.ModelSerializer):
         model = Wishlist
         fields = ['id', 'user', 'items', 'total_count', 'created_at', 'updated_at']
         read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+
+class SellerWithdrawalRequestSerializer(serializers.ModelSerializer):
+    """Read-only snapshot of a payout request (created via OrderViewSet.request_withdrawal)."""
+
+    payout_method_id = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = SellerWithdrawalRequest
+        fields = [
+            'id',
+            'amount',
+            'currency',
+            'payout_method_id',
+            'status',
+            'seller_note',
+            'admin_note',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = (
+            'id',
+            'amount',
+            'currency',
+            'payout_method_id',
+            'status',
+            'seller_note',
+            'admin_note',
+            'created_at',
+            'updated_at',
+        )
+
+
+class ListingOfferSerializer(serializers.ModelSerializer):
+    listing_title = serializers.CharField(source='listing.title', read_only=True)
+
+    class Meta:
+        model = ListingOffer
+        fields = [
+            'id',
+            'listing',
+            'listing_title',
+            'buyer',
+            'seller',
+            'status',
+            'listed_price',
+            'current_amount',
+            'buyer_note',
+            'seller_note',
+            'last_actor',
+            'counter_round',
+            'accepted_until',
+            'created_at',
+            'updated_at',
+        ]
+        read_only_fields = [
+            'id',
+            'listing',
+            'listing_title',
+            'buyer',
+            'seller',
+            'status',
+            'listed_price',
+            'current_amount',
+            'buyer_note',
+            'seller_note',
+            'last_actor',
+            'counter_round',
+            'accepted_until',
+            'created_at',
+            'updated_at',
+        ]

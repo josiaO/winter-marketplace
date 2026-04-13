@@ -188,7 +188,7 @@ class OrderAdmin(admin.ModelAdmin):
     
     def mark_shipped(self, request, queryset):
         n = 0
-        for order in queryset.filter(status__in=['pending', 'confirmed', 'processing']):
+        for order in queryset.filter(status__in=['confirmed', 'processing']):
             try:
                 OrderLifecycleManager.ship_order(order, actor=request.user)
                 n += 1

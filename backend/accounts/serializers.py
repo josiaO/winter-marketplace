@@ -114,7 +114,10 @@ class UserSerializer(serializers.ModelSerializer):
                 'created_at': profile.created_at,
                 'notification_orders': profile.notification_orders,
                 'notification_promotions': profile.notification_promotions,
-                'notification_messages': profile.notification_messages
+                'notification_messages': profile.notification_messages,
+                'seller_notification_language': getattr(
+                    profile, 'seller_notification_language', 'sw'
+                ),
             }
         except Exception:
             return None
@@ -156,7 +159,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         model = Profile
         fields = [
             'id', 'user', 'name', 'phone_number', 'address', 'image', 'code', 'created_at',
-            'notification_orders', 'notification_promotions', 'notification_messages'
+            'notification_orders', 'notification_promotions', 'notification_messages',
+            'seller_notification_language',
         ]
         read_only_fields = ['id', 'user', 'code', 'created_at']
 

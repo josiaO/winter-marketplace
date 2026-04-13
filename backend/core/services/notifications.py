@@ -155,6 +155,8 @@ class PushNotificationService:
         success_count = 0
         tokens_to_delete = []
         
+        safe_data = {str(k): str(v) for k, v in (data or {}).items() if v is not None}
+
         for token in tokens:
             try:
                 msg = self.messaging.Message(
@@ -162,7 +164,7 @@ class PushNotificationService:
                         title=title,
                         body=body,
                     ),
-                    data=data or {},
+                    data=safe_data,
                     token=token,
                 )
                 self.messaging.send(msg)

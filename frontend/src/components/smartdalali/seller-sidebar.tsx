@@ -15,6 +15,9 @@ import {
   ExternalLink,
   ShieldCheck,
   AlertCircle,
+  BarChart3,
+  Star,
+  Landmark,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -39,7 +42,10 @@ export function SellerSidebar() {
     { title: 'Dashboard', href: routes.sellerDashboard(), icon: LayoutDashboard },
     { title: 'My Listings', href: routes.sellerListings(), icon: Package },
     { title: 'Orders', href: routes.sellerOrders(), icon: ShoppingCart },
-    { title: 'Payouts', href: routes.sellerPayouts(), icon: Wallet },
+    { title: 'Wallet', href: routes.sellerWallet(), icon: Wallet },
+    { title: 'Analytics', href: routes.sellerAnalytics(), icon: BarChart3 },
+    { title: 'Reviews', href: routes.sellerReviews(), icon: Star },
+    { title: 'Payouts', href: routes.sellerPayouts(), icon: Landmark },
     { title: 'Messages', href: routes.messages(), icon: MessageSquare },
     { title: 'Settings', href: routes.sellerSettings(), icon: Settings },
   ];

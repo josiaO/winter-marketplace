@@ -40,13 +40,19 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ProductCard } from '@/components/smartdalali/product-card';
+import { PriceFairnessTag } from '@/components/smartdalali/price-fairness-tag';
+import { SellerTrustCard } from '@/components/smartdalali/seller-trust-card';
+import { MakeOfferSheet } from '@/components/smartdalali/make-offer-sheet';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { useAuthStore, useCartStore } from '@/store';
 import { fetchCartForStore } from '@/lib/django-cart-adapter';
 import { api } from '@/lib/api-client';
-import { formatTZS, getInitials, getRelativeTime, formatDate } from '@/lib/helpers';
+import { formatTZS, getInitials, getRelativeTime, formatDate, normalizeMediaUrl } from '@/lib/helpers';
 import { toast } from 'sonner';
+import { isListingInLocalWishlist, toggleLocalWishlist } from '@/lib/local-wishlist';
 import {
   ApiClientError,
   type Listing,
@@ -116,6 +122,12 @@ export function ProductPage({ productId }: { productId: string }) {
   const [reportReason, setReportReason] = useState<ReportReason>('spam');
   const [reportDescription, setReportDescription] = useState('');
   const [isReporting, setIsReporting] = useState(false);
+  const [offerOpen, setOfferOpen] = useState(false);
+  const [reviewStats, setReviewStats] = useState<{
+    recommend_percentage?: number | null;
+    verified_purchase_count?: number;
+  } | null>(null);
+  const [reviewPhotos, setReviewPhotos] = useState<File[]>([]);
 
   // Review System State
   const [canReview, setCanReview] = useState(false);
@@ -162,7 +174,7 @@ export function ProductPage({ productId }: { productId: string }) {
         // Optional eligibility check (don't block main UI for this)
         // Optional eligibility check (don't block main UI for this)
         if (!isAuthLoading && isAuthenticated && user) {
-          api.commerce.orders({ status: 'delivered', role: 'buyer' })
+          api.commerce.orders({ status: 'completed', role: 'buyer' })
             .then((res) => {
               const eligibleOrder = res.results.find((o: Order) =>
                 o.items.some((item) => {
@@ -188,16 +200,33 @@ export function ProductPage({ productId }: { productId: string }) {
     void loadData();
   }, [productId, router, isAuthenticated, user, isAuthLoading]);
 
+  useEffect(() => {
+    if (!productId || productId === 'undefined') return;
+    api.trust
+      .listingReviewStats(productId)
+      .then((s) => setReviewStats(s))
+      .catch(() => setReviewStats(null));
+  }, [productId]);
+
+  useEffect(() => {
+    if (!productId || productId === 'undefined') return;
+    if (!isAuthenticated && !isAuthLoading) {
+      setIsLiked(isListingInLocalWishlist(Number(productId)));
+    }
+  }, [productId, isAuthenticated, isAuthLoading]);
+
   const handleSubmitReview = async () => {
     if (!reviewOrder) return;
     setIsSubmittingReview(true);
     try {
-      await api.commerce.reviewOrder(reviewOrder.id, {
-        rating: reviewRating,
-        comment: reviewComment,
-      });
+      await api.commerce.reviewOrder(
+        reviewOrder.id,
+        { rating: reviewRating, comment: reviewComment },
+        reviewPhotos.length ? reviewPhotos : undefined,
+      );
       toast.success('Review submitted successfully!');
       setCanReview(false);
+      setReviewPhotos([]);
       fetchReviews();
     } catch (err) {
       toast.error('Failed to submit review');
@@ -299,8 +328,16 @@ export function ProductPage({ productId }: { productId: string }) {
   ]);
 
   const handleToggleLike = useCallback(async () => {
+    if (!listing) return;
     if (!isAuthenticated) {
-      toast.error('Please login to add to wishlist');
+      const added = toggleLocalWishlist({
+        listingId: Number(productId),
+        priceSnapshot: Number(listing.price),
+        title: listing.title,
+        image: listing.images?.[0]?.image,
+      });
+      setIsLiked(added);
+      toast.success(added ? 'Saved locally — sign in to sync across devices' : 'Removed from saved items');
       return;
     }
     setIsTogglingLike(true);
@@ -317,7 +354,7 @@ export function ProductPage({ productId }: { productId: string }) {
     } finally {
       setIsTogglingLike(false);
     }
-  }, [isAuthenticated, productId]);
+  }, [isAuthenticated, productId, listing]);
 
   const handleReportListing = useCallback(async () => {
     if (!isAuthenticated) {
@@ -451,7 +488,7 @@ export function ProductPage({ productId }: { productId: string }) {
               >
                 {primaryImage?.image ? (
                   <Image
-                    src={primaryImage.image}
+                    src={normalizeMediaUrl(primaryImage.image) || primaryImage.image}
                     alt={listing.title}
                     fill
                     className="object-cover"
@@ -499,7 +536,7 @@ export function ProductPage({ productId }: { productId: string }) {
                   }`}
                 >
                   <Image
-                    src={img.image}
+                    src={normalizeMediaUrl(img.image) || img.image}
                     alt={`${listing.title} ${i + 1}`}
                     width={80}
                     height={80}
@@ -548,10 +585,11 @@ export function ProductPage({ productId }: { productId: string }) {
 
           {/* Price + delivery */}
           <div className="space-y-1">
-            <div className="flex items-baseline gap-2">
+            <div className="flex flex-wrap items-baseline gap-2">
               <span className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                 {formatTZS(listing.price)}
               </span>
+              <PriceFairnessTag fairness={listing.price_fairness} />
             </div>
             {listing.delivery_is_free === false &&
             listing.delivery_fee != null &&
@@ -652,6 +690,13 @@ export function ProductPage({ productId }: { productId: string }) {
               </Button>
             </div>
           </div>
+          <SellerTrustCard
+            trust={listing.seller_trust}
+            reviewsTotal={reviews.length}
+            onSeeAllReviews={() =>
+              window.scrollTo({ top: document.body.scrollHeight * 0.62, behavior: 'smooth' })
+            }
+          />
 
           {/* Action Buttons */}
           <div className="flex items-center gap-3">
@@ -701,6 +746,20 @@ export function ProductPage({ productId }: { productId: string }) {
               Buy Now
             </Button>
           </div>
+          <Button
+            size="lg"
+            variant="secondary"
+            className="w-full rounded-xl h-11 text-sm font-semibold"
+            onClick={() => {
+              if (!isAuthenticated) {
+                toast.error('Please login to make an offer');
+                return;
+              }
+              setOfferOpen(true);
+            }}
+          >
+            Make an Offer
+          </Button>
 
           <div className="flex items-center justify-between">
             <Button
@@ -782,6 +841,16 @@ export function ProductPage({ productId }: { productId: string }) {
               <p className="text-sm text-muted-foreground mt-1">
                 {reviews.length} {reviews.length === 1 ? 'review' : 'reviews'}
               </p>
+              {typeof reviewStats?.verified_purchase_count === 'number' && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {reviewStats.verified_purchase_count} verified purchases
+                </p>
+              )}
+              {typeof reviewStats?.recommend_percentage === 'number' && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  {reviewStats.recommend_percentage}% of buyers would recommend this
+                </p>
+              )}
             </div>
             <div className="space-y-2">
               {[5, 4, 3, 2, 1].map((star) => (
@@ -847,6 +916,20 @@ export function ProductPage({ productId }: { productId: string }) {
                     onChange={(e) => setReviewComment(e.target.value)}
                     className="text-base rounded-xl min-h-[100px] bg-background"
                   />
+                  <div className="space-y-1">
+                    <Label htmlFor="review-photos" className="text-sm">
+                      Share a photo of what you received (optional)
+                    </Label>
+                    <Input
+                      id="review-photos"
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={(e) =>
+                        setReviewPhotos(Array.from(e.target.files || []))
+                      }
+                    />
+                  </div>
                   <div className="flex justify-end">
                     <Button
                       size="lg"
@@ -890,7 +973,7 @@ export function ProductPage({ productId }: { productId: string }) {
                   const reviewerName =
                     review.reviewer?.first_name && review.reviewer?.last_name
                       ? `${review.reviewer.first_name} ${review.reviewer.last_name}`
-                      : review.reviewer?.username || 'Anonymous User';
+                      : review.reviewer?.username || review.buyer_name || 'Anonymous User';
 
                   return (
                     <motion.div
@@ -928,6 +1011,19 @@ export function ProductPage({ productId }: { productId: string }) {
                       {review.comment && (
                         <p className="text-sm text-muted-foreground">{review.comment}</p>
                       )}
+                      {review.media && review.media.length > 0 && (
+                        <div className="mt-2 flex gap-2 flex-wrap">
+                          {review.media.slice(0, 3).map((m) => {
+                            const src = m.file_url || m.file;
+                            if (!src) return null;
+                            return (
+                              <div key={m.id} className="relative w-20 h-20 rounded-md overflow-hidden border">
+                                <Image src={src} alt="" fill className="object-cover" sizes="80px" />
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                       {review.seller_reply && (
                         <div className="mt-2 ml-4 p-2 rounded-lg bg-muted/50 border-l-2 border-emerald-500">
                           <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-0.5">
@@ -953,9 +1049,15 @@ export function ProductPage({ productId }: { productId: string }) {
           {isLoadingRelated ? (
             <SkeletonGrid />
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-6">
               {relatedProducts.map((product) => (
-                <ProductCard key={product.id} listing={product} onSelect={handleProductSelect} />
+                <ProductCard
+                  key={product.id}
+                  listing={product}
+                  onSelect={handleProductSelect}
+                  density="compact"
+                  showCartControls={false}
+                />
               ))}
             </div>
           )}
@@ -1033,6 +1135,12 @@ export function ProductPage({ productId }: { productId: string }) {
           </div>
         )}
       </AnimatePresence>
+      <MakeOfferSheet
+        open={offerOpen}
+        onOpenChange={setOfferOpen}
+        listingId={Number(productId)}
+        listedPrice={Number(listing.price)}
+      />
     </div>
   );
 }

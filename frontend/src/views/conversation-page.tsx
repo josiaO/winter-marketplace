@@ -26,10 +26,11 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { EmptyState } from '@/components/smartdalali/empty-state';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
-import { getRelativeTime, getInitials } from '@/lib/helpers';
+import { getRelativeTime, getInitials, normalizeMediaUrl } from '@/lib/helpers';
 import { toast } from 'sonner';
 import type { Message, ConversationParticipant, Listing, Order } from '@/types/api';
 import { cn } from '@/lib/utils';
+import Image from 'next/image';
 
 // ── Constants ───────────────────────────────────────────────────────────────
 
@@ -50,6 +51,7 @@ export function ConversationPage({ conversationId }: { conversationId: string })
   const [messages, setMessages] = useState<Message[]>([]);
   const [participants, setParticipants] = useState<ConversationParticipant[]>([]);
   const [listing, setListing] = useState<Listing | null>(null);
+  const [listingContext, setListingContext] = useState<{ id: number; title: string; image?: string | null } | null>(null);
   const [order, setOrder] = useState<Order | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [sendingMessage, setSendingMessage] = useState(false);
@@ -88,7 +90,17 @@ export function ConversationPage({ conversationId }: { conversationId: string })
       setMessages(msgRes?.results || (msgRes as any) || []);
       
       if (conv) {
-        setListing((conv.listing as Listing) || null);
+        const embeddedListing = (conv as any).listing as Listing | null | undefined;
+        const listingId = embeddedListing?.id ?? (conv as any).listing_id ?? null;
+        const listingTitle = embeddedListing?.title ?? (conv as any).listing_title ?? null;
+        const listingImage = (conv as any).listing_image ?? null;
+
+        setListing(embeddedListing || null);
+        if (listingId && listingTitle) {
+          setListingContext({ id: Number(listingId), title: String(listingTitle), image: listingImage });
+        } else {
+          setListingContext(null);
+        }
         setOrder((conv.order as Order) || null);
         
         // Populate participants using the API data
@@ -375,10 +387,10 @@ export function ConversationPage({ conversationId }: { conversationId: string })
                     </span>
                   </div>
                   <span className="text-muted-foreground/30 text-xs">•</span>
-                  {listing && (
+                  {listingContext && (
                     <span className="flex items-center gap-1 text-[10px] sm:text-xs text-muted-foreground truncate max-w-[120px] sm:max-w-none">
                       <Package className="w-3 h-3 flex-shrink-0" />
-                      Re: {listing.title}
+                      Re: {listingContext.title}
                     </span>
                   )}
                   {order && (
@@ -396,7 +408,9 @@ export function ConversationPage({ conversationId }: { conversationId: string })
                   variant="outline"
                   size="sm"
                   className="hidden sm:flex gap-1.5 rounded-full text-xs"
-                  onClick={() => router.push(routes.product(String(listing.id)))}
+                  onClick={() =>
+                    router.push(routes.product(String(listingContext?.id || listing?.id)))
+                  }
                 >
                   <Package className="w-3.5 h-3.5" />
                   View Listing
@@ -575,6 +589,44 @@ export function ConversationPage({ conversationId }: { conversationId: string })
           </div>
 
           <div className="p-3 sm:p-4">
+            {listingContext && (
+              <button
+                type="button"
+                className="mb-2 w-full rounded-xl border bg-muted/20 hover:bg-muted/30 transition-colors p-2 flex items-center gap-2 text-left"
+                onClick={() => router.push(routes.product(String(listingContext.id)))}
+              >
+                <div className="relative w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+                  {(() => {
+                    const img: any =
+                      (listing as any)?.images?.find((i: any) => i.is_primary) ||
+                      (listing as any)?.images?.[0] ||
+                      null;
+                    const srcRaw = listingContext.image || img?.image || (listing as any)?.image || null;
+                    const src = normalizeMediaUrl(srcRaw) || srcRaw;
+                    return src ? (
+                      <Image
+                        src={src}
+                        alt={listingContext.title}
+                        fill
+                        className="object-cover"
+                        sizes="40px"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="w-4 h-4 text-muted-foreground/40" />
+                      </div>
+                    );
+                  })()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-muted-foreground">Regarding listing</p>
+                  <p className="text-sm font-medium text-foreground truncate">{listingContext.title}</p>
+                </div>
+                <Badge variant="secondary" className="text-[10px] h-5 px-2 rounded-full">
+                  View
+                </Badge>
+              </button>
+            )}
             <div className="flex items-end gap-2">
               {/* Attachment button */}
               <Button
@@ -598,7 +650,9 @@ export function ConversationPage({ conversationId }: { conversationId: string })
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={handleKeyDown}
-                placeholder="Type a message..."
+                placeholder={
+                  listingContext?.title ? `Message about “${listingContext.title}”…` : 'Type a message...'
+                }
                 className="flex-1 rounded-xl h-10"
                 disabled={sendingMessage}
               />

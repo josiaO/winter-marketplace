@@ -5,7 +5,7 @@ import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback } from 'react';
 import Image from 'next/image';
 import { motion } from 'framer-motion';
-import { Home, Package, ChevronRight, Tag } from 'lucide-react';
+import { Home, Package, ChevronRight, Tag, LayoutGrid, List } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -27,7 +27,9 @@ import {
 import { ProductCard } from '@/components/smartdalali/product-card';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
 import { EmptyState } from '@/components/smartdalali/empty-state';
+import { useUIStore } from '@/store';
 import { api } from '@/lib/api-client';
+import { normalizeMediaUrl } from '@/lib/helpers';
 import type { Listing, Category, PaginatedResponse } from '@/types/api';
 
 const SORT_OPTIONS = [
@@ -40,6 +42,7 @@ const SORT_OPTIONS = [
 export function CategoryPage({ categorySlug }: { categorySlug: string }) {
   const router = useRouter();
   const slug = categorySlug;
+  const { browseLayout, browseDensity, setBrowseLayout } = useUIStore();
 
   const [category, setCategory] = useState<Category | null>(null);
   const [listings, setListings] = useState<Listing[]>([]);
@@ -178,7 +181,7 @@ export function CategoryPage({ categorySlug }: { categorySlug: string }) {
                 >
                   {sub.image ? (
                     <div className="w-10 h-10 rounded-lg overflow-hidden bg-muted flex-shrink-0 relative">
-                      <Image src={sub.image} alt={sub.name} fill className="object-cover" />
+                      <Image src={normalizeMediaUrl(sub.image) || sub.image} alt={sub.name} fill className="object-cover" />
                     </div>
                   ) : (
                     <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center flex-shrink-0">
@@ -198,18 +201,40 @@ export function CategoryPage({ categorySlug }: { categorySlug: string }) {
         {/* Sort + Results */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-lg font-semibold text-foreground">Products</h2>
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px] h-9">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {SORT_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value}>
-                  {opt.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <div className="flex items-center rounded-full border bg-muted/30 p-1">
+              <Button
+                type="button"
+                variant={browseLayout === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-8 rounded-full px-3"
+                onClick={() => setBrowseLayout('grid')}
+              >
+                <LayoutGrid className="w-4 h-4" />
+              </Button>
+              <Button
+                type="button"
+                variant={browseLayout === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                className="h-8 rounded-full px-3"
+                onClick={() => setBrowseLayout('list')}
+              >
+                <List className="w-4 h-4" />
+              </Button>
+            </div>
+            <Select value={sortBy} onValueChange={setSortBy}>
+              <SelectTrigger className="w-[180px] h-9">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {SORT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {/* Products Grid */}
@@ -225,11 +250,56 @@ export function CategoryPage({ categorySlug }: { categorySlug: string }) {
           />
         ) : (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
-              {listings.map((listing) => (
-                <ProductCard key={listing.id} listing={listing} onSelect={handleProductSelect} />
-              ))}
-            </div>
+            {browseLayout === 'grid' ? (
+              <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-6">
+                {listings.map((listing) => (
+                  <ProductCard
+                    key={listing.id}
+                    listing={listing}
+                    onSelect={handleProductSelect}
+                    density={browseDensity}
+                    showCartControls={browseDensity !== 'compact'}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {listings.map((listing) => (
+                  <button
+                    key={listing.id}
+                    type="button"
+                    className="w-full rounded-xl border bg-card p-3 text-left hover:bg-muted/20"
+                    onClick={() => handleProductSelect(listing)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden flex-shrink-0 relative">
+                        {(listing.images?.[0] as any)?.image ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={(listing.images?.[0] as any)?.image}
+                            alt={listing.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <Package className="w-5 h-5 text-muted-foreground/30" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-foreground truncate">{listing.title}</p>
+                        <p className="text-xs text-muted-foreground truncate">{listing.city || ''}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-emerald-600 dark:text-emerald-400">
+                          {listing.price ? `TZS ${Number(listing.price).toLocaleString('en-TZ')}` : 'TZS —'}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
             {/* Load More */}
             {hasMore && (

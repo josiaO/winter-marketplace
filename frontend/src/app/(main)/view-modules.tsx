@@ -81,6 +81,11 @@ export const CheckoutSuccessPageView = dynamic(
   { ssr: false },
 );
 
+export const GuestPayLinkPageView = dynamic(
+  () => import('@/views/guest-pay-link-page').then((m) => m.GuestPayLinkPage),
+  { ssr: false },
+);
+
 export const OrdersPageView = dynamic(
   () => import('@/views/orders-page').then((m) => m.OrdersPage),
   { ssr: false },
@@ -166,6 +171,26 @@ export const SellerVerifyIdentityPageView = dynamic(
 );
 export const SellerAddPayoutPageView = dynamic(
   () => import('@/views/seller-add-payout').then((m) => m.SellerAddPayoutPage),
+  { ssr: false },
+);
+export const SellerOrderDetailPageView = dynamic(
+  () => import('@/views/seller-order-detail').then((m) => m.SellerOrderDetailPage),
+  { ssr: false },
+);
+export const SellerWalletPageView = dynamic(
+  () => import('@/views/seller-wallet').then((m) => m.SellerWalletPage),
+  { ssr: false },
+);
+export const SellerWithdrawPageView = dynamic(
+  () => import('@/views/seller-withdraw').then((m) => m.SellerWithdrawPage),
+  { ssr: false },
+);
+export const SellerAnalyticsPageView = dynamic(
+  () => import('@/views/seller-analytics').then((m) => m.SellerAnalyticsPage),
+  { ssr: false },
+);
+export const SellerReviewsPageView = dynamic(
+  () => import('@/views/seller-reviews').then((m) => m.SellerReviewsPage),
   { ssr: false },
 );
 

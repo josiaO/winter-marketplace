@@ -12,34 +12,86 @@ import {
   ShieldCheck,
   ShoppingCart,
   Check,
+  ArrowDown,
+  ArrowUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { EmptyState } from '@/components/smartdalali/empty-state';
 import { SkeletonGrid } from '@/components/smartdalali/skeleton-grid';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
-import { formatTZS } from '@/lib/helpers';
+import { formatTZS, getRelativeTime, normalizeMediaUrl } from '@/lib/helpers';
 import { toast } from 'sonner';
-import { ApiClientError, type WishlistItem } from '@/types/api';
+import { ApiClientError, type Listing, type WishlistItem } from '@/types/api';
 import { cn } from '@/lib/utils';
+import {
+  clearLocalWishlist,
+  getLocalWishlist,
+  getLocalWishlistNotifyMap,
+  setLocalWishlistNotify,
+  toggleLocalWishlist,
+  type LocalWishlistEntry,
+} from '@/lib/local-wishlist';
+
+type WishlistCardItem = {
+  id: number;
+  listing: Listing;
+  savedAt?: string;
+  priceSnapshot?: number;
+  isLocal?: boolean;
+};
 
 export function WishlistPage() {
   const router = useRouter();
   const { isAuthenticated, user } = useAuthStore();
 
-  const [items, setItems] = useState<WishlistItem[]>([]);
+  const [items, setItems] = useState<WishlistCardItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [removingId, setRemovingId] = useState<number | null>(null);
   const [addedToCart, setAddedToCart] = useState<Record<number, boolean>>({});
   const [cartAddingListingId, setCartAddingListingId] = useState<number | null>(
     null,
   );
+  const [notifyMap, setNotifyMap] = useState<Record<number, boolean>>({});
+
+  const loadGuestWishlist = useCallback(async () => {
+    const localItems = getLocalWishlist();
+    if (localItems.length === 0) {
+      setItems([]);
+      setNotifyMap(getLocalWishlistNotifyMap());
+      return;
+    }
+    const settled = await Promise.allSettled(
+      localItems.map(async (entry) => {
+        const listing = await api.listings.detail(String(entry.listingId));
+        return {
+          id: entry.listingId,
+          listing,
+          savedAt: entry.savedAt,
+          priceSnapshot: entry.priceSnapshot,
+          isLocal: true,
+        } satisfies WishlistCardItem;
+      }),
+    );
+    setItems(
+      settled
+        .filter((r): r is PromiseFulfilledResult<WishlistCardItem> => r.status === 'fulfilled')
+        .map((r) => r.value),
+    );
+    setNotifyMap(getLocalWishlistNotifyMap());
+  }, []);
 
   const fetchWishlist = useCallback(async () => {
     if (!isAuthenticated) {
-      setIsLoading(false);
+      setIsLoading(true);
+      try {
+        await loadGuestWishlist();
+      } finally {
+        setIsLoading(false);
+      }
       return;
     }
     setIsLoading(true);
@@ -53,13 +105,32 @@ export function WishlistPage() {
         (anyRes?.favorites as WishlistItem[] | undefined) ||
         (anyRes?.results as WishlistItem[] | undefined) ||
         [];
-      setItems(list);
+      const localMap = new Map(
+        getLocalWishlist().map((entry) => [entry.listingId, entry]),
+      );
+      setItems(
+        list
+          .map((item) => {
+            const listing = item.listing;
+            if (!listing) return null;
+            const local = localMap.get(listing.id);
+            return {
+              id: item.id,
+              listing,
+              savedAt: local?.savedAt,
+              priceSnapshot: local?.priceSnapshot,
+              isLocal: false,
+            } satisfies WishlistCardItem;
+          })
+          .filter((item): item is WishlistCardItem => item !== null),
+      );
+      setNotifyMap(getLocalWishlistNotifyMap());
     } catch {
       toast.error('Failed to load wishlist');
     } finally {
       setIsLoading(false);
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, loadGuestWishlist]);
 
   useEffect(() => {
     fetchWishlist();
@@ -69,10 +140,19 @@ export function WishlistPage() {
     setRemovingId(id);
     try {
       // Prefer toggle semantics: remove by listing_id when present.
-      const item = items.find((x) => x.id === id) as any;
-      const listingId = item?.listing?.id ?? item?.listing_id ?? item?.listingId;
+      const item = items.find((x) => x.id === id);
+      const listingId = item?.listing?.id;
       if (!listingId) throw new Error('Missing listing id');
-      await api.commerce.wishlistToggle({ listing_id: listingId });
+      if (item?.isLocal || !isAuthenticated) {
+        toggleLocalWishlist({
+          listingId,
+          priceSnapshot: Number(item?.priceSnapshot ?? item?.listing.price ?? 0),
+          title: item?.listing.title,
+          image: item?.listing.images?.[0]?.image,
+        });
+      } else {
+        await api.commerce.wishlistToggle({ listing_id: listingId });
+      }
       setItems((prev) => prev.filter((x) => x.id !== id));
       toast.success('Removed from wishlist');
     } catch {
@@ -125,20 +205,6 @@ export function WishlistPage() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <EmptyState
-          icon={Heart}
-          title="Please login to view wishlist"
-          description="You need to be logged in to view and manage your saved items."
-          actionLabel="Login"
-          onAction={() => router.push(routes.login())}
-        />
-      </div>
-    );
-  }
-
   if (items.length === 0) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
@@ -152,8 +218,12 @@ export function WishlistPage() {
           <EmptyState
             icon={Heart}
             title="Your wishlist is empty"
-            description="Save items you love to your wishlist. They'll appear here so you can easily find them later."
-            actionLabel="Explore Products"
+            description={
+              isAuthenticated
+                ? "Save items you love to your wishlist. They'll appear here so you can easily find them later."
+                : 'Save items without an account and we will keep them on this device until you are ready to sign up.'
+            }
+            actionLabel={isAuthenticated ? 'Explore Products' : 'Start Shopping'}
             onAction={() => router.push(routes.home())}
           />
         </motion.div>
@@ -171,9 +241,23 @@ export function WishlistPage() {
           <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
             My Wishlist
           </h1>
-          <span className="text-sm text-muted-foreground">
-            {items.length} {items.length === 1 ? 'item' : 'items'}
-          </span>
+          <div className="text-right">
+            <span className="text-sm text-muted-foreground block">
+              {items.length} {items.length === 1 ? 'item' : 'items'}
+            </span>
+            {!isAuthenticated && items.length > 0 && (
+              <button
+                type="button"
+                className="text-xs text-primary hover:underline"
+                onClick={() => {
+                  clearLocalWishlist();
+                  setItems([]);
+                }}
+              >
+                Clear local saves
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
@@ -185,6 +269,12 @@ export function WishlistPage() {
                 listing.seller?.first_name && listing.seller?.last_name
                   ? `${listing.seller.first_name} ${listing.seller.last_name}`
                   : listing.seller?.username || '';
+
+              const prevPrice = Number(wishlistItem.priceSnapshot ?? listing.price);
+              const currentPrice = Number(listing.price ?? 0);
+              const priceDiff = currentPrice - prevPrice;
+              const stockQty =
+                typeof listing.stock_quantity === 'number' ? listing.stock_quantity : undefined;
 
               return (
                 <motion.div
@@ -202,7 +292,7 @@ export function WishlistPage() {
                   >
                     {primaryImage?.image ? (
                       <Image
-                        src={primaryImage.image}
+                        src={normalizeMediaUrl(primaryImage.image) || primaryImage.image}
                         alt={listing.title}
                         fill
                         className="object-cover transition-transform duration-500 group-hover:scale-105"
@@ -261,11 +351,59 @@ export function WishlistPage() {
                     </h3>
 
                     {/* Price */}
-                    <div className="flex items-baseline gap-1">
+                    <div className="flex items-baseline gap-1 flex-wrap">
                       <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
                         {formatTZS(listing.price)}
                       </span>
+                      {wishlistItem.savedAt && (
+                        <span className="text-[10px] text-muted-foreground">
+                          saved {getRelativeTime(wishlistItem.savedAt)}
+                        </span>
+                      )}
                     </div>
+                    {wishlistItem.priceSnapshot != null && priceDiff !== 0 && (
+                      <div
+                        className={cn(
+                          'inline-flex items-center gap-1 text-xs font-medium rounded-full px-2 py-1',
+                          priceDiff < 0
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300'
+                            : 'bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300',
+                        )}
+                      >
+                        {priceDiff < 0 ? (
+                          <ArrowDown className="w-3.5 h-3.5" />
+                        ) : (
+                          <ArrowUp className="w-3.5 h-3.5" />
+                        )}
+                        {priceDiff < 0 ? 'Price dropped' : 'Price increased'}{' '}
+                        {formatTZS(Math.abs(priceDiff))}
+                      </div>
+                    )}
+                    {stockQty !== undefined && stockQty > 0 && stockQty <= 2 && (
+                      <p className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                        Only {stockQty} left
+                      </p>
+                    )}
+                    {stockQty !== undefined && stockQty < 1 && (
+                      <div className="rounded-lg bg-muted px-2 py-2">
+                        <p className="text-xs font-medium text-muted-foreground">Out of stock</p>
+                        <div className="mt-2 flex items-center justify-between gap-2">
+                          <span className="text-xs text-muted-foreground">Notify me when available</span>
+                          <Switch
+                            checked={Boolean(notifyMap[listing.id])}
+                            onCheckedChange={(checked) => {
+                              setLocalWishlistNotify(listing.id, checked);
+                              setNotifyMap((prev) => ({ ...prev, [listing.id]: checked }));
+                              toast.success(
+                                checked
+                                  ? 'We will remember to notify you on this device.'
+                                  : 'Availability reminder turned off.',
+                              );
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {/* Seller */}
                     <div className="flex items-center gap-1.5">

@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
+import { ApiClientError } from '@/types/api';
 import {
   Smartphone, Shirt, Home, Coffee, CarFront, BookOpen,
   Sparkles, Dumbbell, PackageSearch, Loader2, Store,
@@ -21,6 +22,7 @@ import {
 interface StoreSetupFormValues {
   store_name: string;
   store_category: string;
+  store_category_other?: string;
   store_location: string;
   seller_type: 'product' | 'service';
 }
@@ -54,7 +56,7 @@ export function SellerStoreSetupPage() {
   const [sellerType, setSellerType] = useState<'product' | 'service'>('product');
 
   const { register, handleSubmit, setValue, formState: { errors } } = useForm<StoreSetupFormValues>({
-    defaultValues: { store_name: '', store_category: '', store_location: '', seller_type: 'product' }
+    defaultValues: { store_name: '', store_category: '', store_category_other: '', store_location: '', seller_type: 'product' }
   });
 
   useEffect(() => {
@@ -80,19 +82,29 @@ export function SellerStoreSetupPage() {
       toast.error('Tafadhali chagua mkoa uliopo. (Please select a location)');
       return;
     }
+    if (data.store_category === 'other' && !data.store_category_other?.trim()) {
+      toast.error('Please describe your store category when selecting Other.');
+      return;
+    }
 
     setIsLoading(true);
     try {
       await api.sellers.storeSetup({
         store_name: data.store_name,
-        store_categories: [data.store_category],
+        store_category: data.store_category,
+        store_category_other: data.store_category === 'other' ? data.store_category_other?.trim() : '',
         store_location: data.store_location,
         seller_type: data.seller_type,
       } as any);
       toast.success('Duka lako limeundwa! Anza kuongeza bidhaa.');
       router.push(routes.sellerDashboard());
     } catch (err: unknown) {
-      toast.error(err instanceof Error ? err.message : 'Failed to setup store.');
+      if (err instanceof ApiClientError) {
+        const firstFieldError = Object.values(err.errors || {})[0]?.[0];
+        toast.error(firstFieldError || err.detail || err.message || 'Failed to setup store.');
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Failed to setup store.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -183,6 +195,25 @@ export function SellerStoreSetupPage() {
                 </button>
               ))}
             </div>
+            {selectedCategory === 'other' && (
+              <div className="space-y-2">
+                <Label htmlFor="store_category_other" className="text-sm font-medium">
+                  Tell us what you sell
+                </Label>
+                <Input
+                  id="store_category_other"
+                  placeholder="e.g. Handmade crafts, farm supplies..."
+                  className="h-11"
+                  {...register('store_category_other', {
+                    validate: (value) =>
+                      selectedCategory !== 'other' || !!value?.trim() || 'Please describe your category',
+                  })}
+                />
+                {errors.store_category_other && (
+                  <p className="text-sm text-destructive">{errors.store_category_other.message}</p>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Location */}

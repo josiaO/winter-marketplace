@@ -1,3 +1,5 @@
+import re
+
 from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -42,6 +44,8 @@ class CategoryViewSet(viewsets.ModelViewSet):
         """Allow read for anyone, write only for admins."""
         if self.action in ['list', 'retrieve', 'fields', 'attributes', 'subcategories']:
             permission_classes = [permissions.AllowAny]
+        elif self.action == 'suggest_from_title':
+            permission_classes = [permissions.IsAuthenticated]
         else:
             permission_classes = [IsAdmin]
         return [permission() for permission in permission_classes]
@@ -195,6 +199,58 @@ class CategoryViewSet(viewsets.ModelViewSet):
         queryset = self.get_queryset().filter(parent__isnull=False)
         serializer = CategoryListSerializer(queryset, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=['post'], url_path='suggest-from-title')
+    def suggest_from_title(self, request):
+        """
+        Lightweight category suggestion from listing title (keyword overlap on leaf categories).
+        """
+        title = (request.data.get('title') or '').strip()
+        if len(title) < 3:
+            return Response({'detail': 'Title is too short.'}, status=400)
+
+        title_tokens = {t for t in re.findall(r'[\w]+', title.lower()) if len(t) > 1}
+        if not title_tokens:
+            return Response({'detail': 'Could not derive keywords from title.'}, status=400)
+
+        candidates = (
+            self.get_queryset()
+            .filter(parent__isnull=False)
+            .select_related('parent')
+        )
+
+        best = None
+        best_score = 0.0
+        for cat in candidates:
+            name_tokens = {t for t in re.findall(r'[\w]+', cat.name.lower()) if len(t) > 1}
+            slug_tokens = {t for t in re.findall(r'[\w]+', (cat.slug or '').lower()) if len(t) > 1}
+            score = len(title_tokens & name_tokens) * 2.0 + len(title_tokens & slug_tokens)
+            parent = cat.parent
+            if parent:
+                pn = {t for t in re.findall(r'[\w]+', parent.name.lower()) if len(t) > 1}
+                score += len(title_tokens & pn) * 1.5
+            if score > best_score:
+                best_score = score
+                best = cat
+
+        if best is None or best_score < 1:
+            return Response(
+                {
+                    'category_id': None,
+                    'parent_name': None,
+                    'category_name': None,
+                    'confidence': 0.0,
+                }
+            )
+
+        return Response(
+            {
+                'category_id': best.id,
+                'parent_name': best.parent.name if best.parent else None,
+                'category_name': best.name,
+                'confidence': min(1.0, best_score / 8.0),
+            }
+        )
 
 
 class CategoryFieldViewSet(viewsets.ModelViewSet):

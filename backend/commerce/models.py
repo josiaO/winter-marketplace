@@ -292,7 +292,8 @@ class Order(BaseModel):
             old_instance = Order.objects.get(pk=self.pk)
             # Enforce state machine rules
             valid_transitions = {
-                'pending': ['confirmed', 'processing', 'shipped', 'arrived', 'delivered', 'completed', 'cancelled'],
+                # Payment must clear (→ confirmed) before fulfilment; no ship-from-pending / COD.
+                'pending': ['confirmed', 'cancelled'],
                 'confirmed': ['processing', 'shipped', 'arrived', 'delivered', 'completed', 'cancelled'],
                 'processing': ['shipped', 'arrived', 'delivered', 'completed', 'cancelled'],
                 'shipped': ['arrived', 'delivered', 'completed', 'disputed', 'cancelled'],
@@ -568,6 +569,103 @@ class Delivery(BaseModel):
     
     def __str__(self):
         return f"Delivery for Order #{self.order.id} - {self.status}"
+
+
+class SellerWithdrawalRequest(BaseModel):
+    """
+    Seller asks the platform to pay out released escrow funds to their saved payout method.
+    Ops/admin completes or rejects outside this row (no automatic gateway payout here).
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'pending', _('Pending')
+        COMPLETED = 'completed', _('Completed')
+        REJECTED = 'rejected', _('Rejected')
+
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='withdrawal_requests',
+    )
+    amount = models.DecimalField(max_digits=14, decimal_places=2)
+    currency = models.CharField(max_length=3, default='TZS')
+    payout_method = models.ForeignKey(
+        'marketplace.SellerPaymentMethod',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='withdrawal_requests',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING,
+        db_index=True,
+    )
+    seller_note = models.CharField(max_length=500, blank=True)
+    admin_note = models.CharField(max_length=500, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = _('Seller withdrawal request')
+        verbose_name_plural = _('Seller withdrawal requests')
+
+    def __str__(self):
+        return f'Withdrawal {self.amount} {self.currency} — {self.seller_id} ({self.status})'
+
+
+class ListingOffer(BaseModel):
+    """
+    In-platform price negotiation between buyer and seller (single listing thread).
+    """
+
+    class Status(models.TextChoices):
+        AWAITING_SELLER = 'awaiting_seller', _('Awaiting seller')
+        AWAITING_BUYER = 'awaiting_buyer', _('Awaiting buyer')
+        ACCEPTED = 'accepted', _('Accepted')
+        DECLINED = 'declined', _('Declined')
+        EXPIRED = 'expired', _('Expired')
+        SUPERSEDED = 'superseded', _('Superseded')
+        FULFILLED = 'fulfilled', _('Fulfilled at checkout')
+
+    listing = models.ForeignKey(
+        'listings.Listing',
+        on_delete=models.CASCADE,
+        related_name='offers',
+    )
+    buyer = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='listing_offers_as_buyer',
+    )
+    seller = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='listing_offers_as_seller',
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.AWAITING_SELLER,
+        db_index=True,
+    )
+    listed_price = models.DecimalField(max_digits=14, decimal_places=2)
+    current_amount = models.DecimalField(max_digits=14, decimal_places=2)
+    buyer_note = models.TextField(blank=True)
+    seller_note = models.TextField(blank=True)
+    last_actor = models.CharField(max_length=10, blank=True)
+    counter_round = models.PositiveSmallIntegerField(default=0)
+    accepted_until = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['buyer', 'status']),
+            models.Index(fields=['listing', 'buyer', 'status']),
+        ]
+
+    def __str__(self):
+        return f'Offer {self.id} listing={self.listing_id} {self.status}'
 
 
 class OrderAuditLog(BaseModel):

@@ -31,9 +31,17 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { api } from '@/lib/api-client';
 import { useAuthStore } from '@/store';
 import { routes } from '@/lib/routes';
+import { ApiClientError } from '@/types/api';
 
 // ─── Schema ────────────────────────────────────────────────────────────────────
 
@@ -125,10 +133,12 @@ function ImageUploadField({ label, description, currentValue, onFileSelect, aspe
 
 export function SellerSettingsView() {
   const router = useRouter();
-  const { user, fetchMe } = useAuthStore();
+  const { user, fetchUser } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [storeCategory, setStoreCategory] = useState<string>('');
+  const [storeCategoryOther, setStoreCategoryOther] = useState<string>('');
 
   const form = useForm<SettingsFormData>({
     resolver: zodResolver(settingsSchema),
@@ -148,6 +158,12 @@ export function SellerSettingsView() {
   useEffect(() => {
     if (user?.seller_profile) {
         const sp = user.seller_profile;
+        const existingCategory =
+          ((sp as any).store_categories && Array.isArray((sp as any).store_categories) && (sp as any).store_categories[0]) ||
+          (sp as any).store_category ||
+          '';
+        setStoreCategory(existingCategory);
+        setStoreCategoryOther((sp as any).store_category_other || '');
         form.reset({
             store_name: sp.store_name || '',
             store_description: sp.store_description || '',
@@ -163,17 +179,33 @@ export function SellerSettingsView() {
   }, [user, form]);
 
   const onSubmit = async (data: SettingsFormData) => {
+    if (!storeCategory) {
+      toast.error('Please select a store category.');
+      return;
+    }
+    if (storeCategory === 'other' && !storeCategoryOther.trim()) {
+      toast.error('Please describe your category when selecting Other.');
+      return;
+    }
+
     setIsSubmitting(true);
     try {
       await api.sellers.storeSetup({
         ...data,
+        store_category: storeCategory,
+        store_category_other: storeCategory === 'other' ? storeCategoryOther.trim() : '',
         store_logo: logoFile,
         store_banner: bannerFile,
       });
       toast.success('Store settings updated successfully!');
-      await fetchMe(); // Refresh profile data
+      await fetchUser(); // Refresh profile data
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Failed to update settings.');
+      if (err instanceof ApiClientError) {
+        const firstFieldError = Object.values(err.errors || {})[0]?.[0];
+        toast.error(firstFieldError || err.detail || err.message || 'Failed to update settings.');
+      } else {
+        toast.error(err instanceof Error ? err.message : 'Failed to update settings.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -264,6 +296,43 @@ export function SellerSettingsView() {
                      <p className="text-xs text-destructive">{form.formState.errors.store_location.message}</p>
                    )}
                  </div>
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                 <div className="space-y-2">
+                   <Label>Store Category</Label>
+                   <Select
+                     value={storeCategory || '__unset'}
+                     onValueChange={(v) => setStoreCategory(v === '__unset' ? '' : v)}
+                   >
+                     <SelectTrigger>
+                       <SelectValue placeholder="Select store category" />
+                     </SelectTrigger>
+                     <SelectContent>
+                       <SelectItem value="__unset">Select store category</SelectItem>
+                       <SelectItem value="electronics">Electronics</SelectItem>
+                       <SelectItem value="fashion">Fashion</SelectItem>
+                       <SelectItem value="home">Home</SelectItem>
+                       <SelectItem value="food">Food</SelectItem>
+                       <SelectItem value="auto_parts">Auto Parts</SelectItem>
+                       <SelectItem value="books">Books</SelectItem>
+                       <SelectItem value="beauty">Beauty</SelectItem>
+                       <SelectItem value="sports">Sports</SelectItem>
+                       <SelectItem value="other">Other</SelectItem>
+                     </SelectContent>
+                   </Select>
+                 </div>
+                 {storeCategory === 'other' && (
+                   <div className="space-y-2">
+                     <Label htmlFor="store_category_other">Other Category</Label>
+                     <Input
+                       id="store_category_other"
+                       value={storeCategoryOther}
+                       onChange={(e) => setStoreCategoryOther(e.target.value)}
+                       placeholder="Describe your store category"
+                     />
+                   </div>
+                 )}
                </div>
 
                <div className="space-y-2">
