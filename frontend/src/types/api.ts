@@ -57,7 +57,15 @@ export interface UserProfile {
   date_of_birth: string | null;
 }
 
-export type VerificationStatus = 'pending' | 'verified' | 'rejected' | 'unverified';
+export type VerificationStatus =
+  | 'incomplete'
+  | 'pending_id'
+  | 'under_review'
+  | 'verified'
+  | 'rejected'
+  | 'suspended'
+  | 'pending' // Legacy mapping
+  | 'unverified';
 
 export interface SellerProfile {
   id: number;
@@ -398,7 +406,7 @@ export type OrderStatus =
 
 export type ShippingMethod = 'standard' | 'express' | 'pickup';
 export type PaymentMethod = 'mobile_money' | 'bank_transfer' | 'card' | 'cash_on_delivery';
-export type PaymentChannel = 'tigo_pesa' | 'm_pesa' | 'airtel_money' | 'halopesa' | 'azam_pay' | 'bank';
+export type PaymentChannel = 'tigo_pesa' | 'mpesa' | 'airtel_money' | 'halopesa' | 'azampesa' | 'bank';
 
 /** Matches Django `OrderItemSerializer`; legacy flat fields optional. */
 export interface OrderItem {
@@ -612,7 +620,7 @@ export interface Report {
 export interface CreateReportPayload {
   listing?: number | null;
   reported_user?: number | null;
-  report_type?: 'listing' | 'user' | 'review' | 'message';
+  report_type: 'listing' | 'user' | 'review' | 'message';
   reason: ReportReason;
   description: string;
 }

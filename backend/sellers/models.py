@@ -6,41 +6,7 @@ from marketplace.models import SellerProfile
 from core.encryption import get_encryptor
 
 
-class SellerIDVerification(models.Model):
-    ID_TYPE_CHOICES = (
-        ('national_id', _('National ID')),
-        ('passport', _('Passport')),
-        ('voters_card', _("Voter's card")),
-        ('driving_license', _('Driving license')),
-    )
 
-    seller = models.OneToOneField(
-        SellerProfile,
-        on_delete=models.CASCADE,
-        related_name='id_verification',
-    )
-    id_type = models.CharField(max_length=30, choices=ID_TYPE_CHOICES)
-    id_number = models.CharField(max_length=50)
-    id_front_image = models.ImageField(upload_to='verifications/id/')
-    selfie_with_id = models.ImageField(upload_to='verifications/selfies/')
-    submitted_at = models.DateTimeField(auto_now_add=True)
-    reviewed_at = models.DateTimeField(blank=True, null=True)
-    reviewed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='seller_id_reviews',
-    )
-    rejection_reason = models.TextField(blank=True)
-    notes = models.TextField(blank=True)
-
-    class Meta:
-        verbose_name = _('Seller ID verification')
-        verbose_name_plural = _('Seller ID verifications')
-
-    def __str__(self):
-        return f'ID verification for seller {self.seller_id}'
 
 
 from escrow_engine.constants import SELCOM_CHANNELS
@@ -122,39 +88,7 @@ class SellerOnboardingProgress(models.Model):
         return f'Progress seller {self.seller_id}'
 
 
-class SellerBusinessVerification(models.Model):
-    STATUS_CHOICES = SellerVerificationStatus.choices
 
-    seller = models.OneToOneField(
-        SellerProfile,
-        on_delete=models.CASCADE,
-        related_name='business_verification',
-    )
-    business_name = models.CharField(max_length=200)
-    business_registration_no = models.CharField(max_length=100, blank=True)
-    tin_number = models.CharField(max_length=50, blank=True)
-    business_certificate = models.FileField(
-        upload_to='verifications/business/',
-        blank=True,
-        null=True,
-    )
-    bank_account_number = models.CharField(max_length=50, blank=True)
-    bank_name = models.CharField(max_length=100, blank=True)
-    bank_account_name = models.CharField(max_length=100, blank=True)
-    status = models.CharField(max_length=20, choices=SellerVerificationStatus.choices, default=SellerVerificationStatus.PENDING)
-    submitted_at = models.DateTimeField(auto_now_add=True)
-    reviewed_at = models.DateTimeField(null=True, blank=True)
-    reviewed_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name='seller_business_reviews',
-    )
-    rejection_reason = models.TextField(blank=True)
-
-    class Meta:
-        verbose_name = _('Seller business verification')
 
 
 class SellerActionLog(models.Model):

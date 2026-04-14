@@ -21,8 +21,21 @@ class IsAdminOrReadOnly(BasePermission):
         return user.is_superuser or user.is_staff
 
 class IsSeller(BasePermission):
-    """Allow access only to users in the 'seller' group or with an active SellerProfile."""
+    """
+    Allow access to any user with a SellerProfile.
+    Suitable for onboarding and profile management.
+    """
+    def has_permission(self, request, view):
+        user = request.user
+        if not user or user.is_anonymous:
+            return False
+        return hasattr(user, 'seller_profile')
 
+class IsActiveSeller(BasePermission):
+    """
+    Allow access only to verified sellers with an active storefront.
+    Suitable for public commerce actions.
+    """
     def has_permission(self, request, view):
         user = request.user
         if not user or user.is_anonymous:

@@ -16,6 +16,8 @@ import {
   Phone,
   Send,
   Truck,
+  MoreHorizontal,
+  ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -207,36 +209,57 @@ export function SellerOrderDetailPage() {
         </div>
       </div>
 
-      <Card>
-        <CardHeader className="pb-2">
-          <CardTitle className="text-lg">Progress</CardTitle>
+      <Card className="border-0 shadow-lg shadow-black/[0.02] bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm ring-1 ring-black/5 dark:ring-white/5 overflow-hidden">
+        <CardHeader className="pb-4 border-b border-black/5 dark:border-white/5">
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <Clock className="w-4 h-4 text-primary" />
+            Order Journey
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {steps.map((s, i) => (
-            <div key={s.key} className="flex gap-3">
-              <div className="flex flex-col items-center pt-0.5">
-                {s.done ? (
-                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
-                ) : s.action ? (
-                  <Clock className="w-5 h-5 text-amber-500 shrink-0" />
-                ) : (
-                  <Circle className="w-5 h-5 text-muted-foreground/40 shrink-0" />
-                )}
-                {i < steps.length - 1 && <div className="w-px flex-1 min-h-[16px] bg-border my-1" />}
-              </div>
-              <div className="flex-1 pb-2">
-                <p className={`font-medium ${s.action && !s.done ? 'text-amber-700 dark:text-amber-400' : ''}`}>
-                  {s.label}
-                  {s.action && !s.done && (
-                    <Badge variant="secondary" className="ml-2 text-[10px]">
-                      Action required
-                    </Badge>
+        <CardContent className="pt-6 relative">
+          {/* Vertical line connector */}
+          <div className="absolute left-[27px] top-[40px] bottom-[40px] w-0.5 bg-muted/60" />
+          
+          <div className="space-y-8 relative">
+            {steps.map((s, i) => (
+              <div key={s.key} className="flex gap-4">
+                <div className="relative z-10 flex items-center justify-center w-7 h-7 rounded-full bg-background ring-4 ring-background">
+                  {s.done ? (
+                    <div className="w-5 h-5 rounded-full bg-emerald-500 flex items-center justify-center">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  ) : s.action ? (
+                    <div className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center animate-pulse">
+                      <Clock className="w-3.5 h-3.5 text-white" />
+                    </div>
+                  ) : (
+                    <div className="w-5 h-5 rounded-full bg-muted border-2 border-muted-foreground/20" />
                   )}
-                </p>
-                {s.at && <p className="text-xs text-muted-foreground">{getRelativeTime(s.at)}</p>}
+                </div>
+                <div className="flex-1 -mt-0.5">
+                  <div className="flex items-center gap-2">
+                    <p className={`text-sm font-bold ${s.done ? 'text-foreground' : 'text-muted-foreground'}`}>
+                      {s.label}
+                    </p>
+                    {s.action && !s.done && (
+                      <Badge className="bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-400 border-0 text-[10px] font-bold">
+                        ACTION NEEDED
+                      </Badge>
+                    )}
+                  </div>
+                  {s.at ? (
+                    <p className="text-[11px] font-bold text-muted-foreground/60 uppercase tracking-wider mt-0.5">
+                      {getRelativeTime(s.at)}
+                    </p>
+                  ) : !s.done && (
+                    <p className="text-[11px] font-medium text-muted-foreground/40 mt-0.5 italic">
+                      Pending...
+                    </p>
+                  )}
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
         </CardContent>
       </Card>
 
@@ -252,52 +275,57 @@ export function SellerOrderDetailPage() {
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">Delivery</CardTitle>
+      <Card className="border-0 shadow-lg shadow-black/[0.02] bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm ring-1 ring-black/5 dark:ring-white/5">
+        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <CardTitle className="text-base font-bold flex items-center gap-2">
+            <MapPin className="w-4 h-4 text-primary" />
+            Shipment Details
+          </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex items-start justify-between gap-2">
-            <div className="flex gap-2 min-w-0">
-              <MapPin className="w-4 h-4 text-muted-foreground shrink-0 mt-1" />
-              <p className="text-sm whitespace-pre-wrap">{order.shipping_address}</p>
+        <CardContent className="space-y-6">
+          <div className="p-4 rounded-2xl bg-white/50 dark:bg-black/20 ring-1 ring-black/5 dark:ring-white/5 space-y-4">
+            <div className="flex items-start justify-between gap-4">
+              <div className="space-y-1">
+                 <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest opacity-60">Buyer Address</p>
+                 <p className="text-sm font-bold leading-relaxed">{order.shipping_address}</p>
+              </div>
+              <Button type="button" variant="ghost" size="icon" className="shrink-0 h-8 w-8 rounded-lg" onClick={copyAddr}>
+                <Copy className="w-4 h-4" />
+              </Button>
             </div>
-            <Button type="button" variant="outline" size="sm" className="shrink-0 gap-1" onClick={copyAddr}>
-              <Copy className="w-3.5 h-3.5" />
-              Copy
-            </Button>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {(() => {
-              const callTarget = String(order.shipping_phone || '').trim();
-              const whatsappTarget = waLink(order.shipping_phone);
-              const hasPhone = callTarget.length > 0 && whatsappTarget !== '#';
-              return (
-                <>
-            <Button variant="outline" size="sm" className="gap-2" asChild>
-              <a href={hasPhone ? `tel:${callTarget}` : '#'} aria-disabled={!hasPhone}>
-                <Phone className="w-4 h-4" />
-                Call
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" className="gap-2" asChild>
-              <a
-                href={whatsappTarget}
-                target={hasPhone ? '_blank' : undefined}
-                rel={hasPhone ? 'noreferrer' : undefined}
-                aria-disabled={!hasPhone}
-              >
-                <MessageCircle className="w-4 h-4" />
-                WhatsApp
-              </a>
-            </Button>
-                </>
-              );
-            })()}
-            <Button variant="secondary" size="sm" className="gap-2" onClick={() => void openChat()}>
-              <MessageCircle className="w-4 h-4" />
-              Chat in app
-            </Button>
+            
+            <div className="flex flex-wrap gap-2.5">
+              {(() => {
+                const callTarget = String(order.shipping_phone || '').trim();
+                const whatsappTarget = waLink(order.shipping_phone);
+                const hasPhone = callTarget.length > 0 && whatsappTarget !== '#';
+                return (
+                  <>
+                    <Button variant="outline" size="sm" className="rounded-xl h-10 px-4 font-bold border-emerald-500/20 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-50 bg-emerald-50/50" asChild>
+                      <a href={hasPhone ? `tel:${callTarget}` : '#'} aria-disabled={!hasPhone}>
+                        <Phone className="w-3.5 h-3.5 mr-2" />
+                        Call Buyer
+                      </a>
+                    </Button>
+                    <Button variant="outline" size="sm" className="rounded-xl h-10 px-4 font-bold border-green-500/20 text-green-700 dark:text-green-400 hover:bg-green-50 bg-green-50/50" asChild>
+                      <a
+                        href={whatsappTarget}
+                        target={hasPhone ? '_blank' : undefined}
+                        rel={hasPhone ? 'noreferrer' : undefined}
+                        aria-disabled={!hasPhone}
+                      >
+                        <MessageCircle className="w-3.5 h-3.5 mr-2" />
+                        WhatsApp
+                      </a>
+                    </Button>
+                  </>
+                );
+              })()}
+              <Button variant="secondary" size="sm" className="rounded-xl h-10 px-4 font-bold gap-2" onClick={() => void openChat()}>
+                <MessageCircle className="w-3.5 h-3.5" />
+                In-app Chat
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>

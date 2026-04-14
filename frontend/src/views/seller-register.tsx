@@ -40,8 +40,8 @@ export function SellerRegisterPage() {
       const me = await api.auth.me();
       setUser(me as any);
       
-      toast.success('Awesome! Let\'s setup your store.');
-      router.push(routes.sellerOnboardingStoreSetup());
+      toast.success('Wait, awesome! Let\'s setup your store basics.');
+      router.push(routes.sellerDashboard());
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to register as seller.';
       toast.error(message);

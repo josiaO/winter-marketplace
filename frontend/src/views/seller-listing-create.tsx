@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { routes } from '@/lib/routes';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   Upload,
   X,
@@ -12,6 +12,8 @@ import {
   ArrowLeft,
   GripVertical,
   ChevronRight,
+  Sparkles,
+  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndContext, closestCenter, PointerSensor, useSensor, useSensors, DragEndEvent } from '@dnd-kit/core';
@@ -314,14 +316,25 @@ export function SellerListingCreatePage() {
         </div>
       </div>
 
-      <div className="flex gap-1">
+      <div className="flex gap-1.5 h-1.5 px-1">
         {[1, 2, 3, ...(isVerified ? [4] : [])].map((s) => (
-          <div key={s} className={`h-1 flex-1 rounded-full ${step >= s ? 'bg-primary' : 'bg-muted'}`} />
+          <div key={s} className="flex-1 relative">
+            <div className={`absolute inset-0 rounded-full transition-all duration-500 ${step >= s ? 'bg-primary shadow-[0_0_8px_rgba(var(--primary),0.4)]' : 'bg-muted'}`} />
+            {step === s && (
+              <motion.div
+                layoutId="step-indicator"
+                className="absolute inset-0 bg-primary rounded-full"
+                transition={{ type: 'spring', bounce: 0.2, duration: 0.6 }}
+              />
+            )}
+          </div>
         ))}
       </div>
 
+      <AnimatePresence mode="wait">
+
       {step === 1 && (
-        <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+        <motion.div key="step-1" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
           <Card className="border-0 shadow-md">
             <CardHeader>
               <CardTitle>Photos</CardTitle>
@@ -374,7 +387,7 @@ export function SellerListingCreatePage() {
       )}
 
       {step === 2 && (
-        <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+        <motion.div key="step-2" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
           <Card className="border-0 shadow-md">
             <CardHeader>
               <CardTitle>The basics</CardTitle>
@@ -385,28 +398,35 @@ export function SellerListingCreatePage() {
                 <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Samsung Galaxy A54" />
               </div>
               {(suggestLoading || suggestName) && (
-                <div className="rounded-xl border bg-muted/30 p-3 text-sm space-y-2">
+                <div className="rounded-2xl border-0 bg-primary/5 dark:bg-primary/10 p-4 relative overflow-hidden ring-1 ring-primary/20">
+                  <div className="absolute top-0 right-0 p-2 opacity-20">
+                    <Sparkles className="w-8 h-8 text-primary" />
+                  </div>
                   {suggestLoading ? (
-                    <Skeleton className="h-4 w-2/3" />
+                    <div className="flex items-center gap-3">
+                      <Loader2 className="w-4 h-4 animate-spin text-primary" />
+                      <Skeleton className="h-4 w-2/3" />
+                    </div>
                   ) : (
-                    <>
-                      <p>
-                        We think this is:{' '}
-                        <span className="font-medium">
-                          {suggestParent ? `${suggestParent} › ` : ''}
-                          {suggestName}
-                        </span>
-                        . Is that right?
+                    <div className="space-y-3 relative z-10">
+                      <div className="flex items-center gap-2 text-primary">
+                        <Sparkles className="w-4 h-4" />
+                        <span className="text-xs font-bold uppercase tracking-wider">Auto-Categorized</span>
+                      </div>
+                      <p className="text-sm font-semibold leading-relaxed">
+                        Is <span className="text-primary font-bold underline decoration-2 decoration-primary/30 underline-offset-4 tracking-tight">
+                          {suggestParent ? `${suggestParent} › ` : ''}{suggestName}
+                        </span> correct?
                       </p>
                       <div className="flex gap-2">
-                        <Button size="sm" type="button" onClick={() => toast.success('Category kept')}>
-                          Yes
+                        <Button size="sm" type="button" className="rounded-lg h-8 px-4 font-bold shadow-md shadow-primary/20" onClick={() => toast.success('Category kept')}>
+                          Yes, perfect
                         </Button>
-                        <Button size="sm" variant="outline" type="button" onClick={() => toast.info('Pick a category below')}>
-                          Change
+                        <Button size="sm" variant="outline" type="button" className="rounded-lg h-8 px-4 font-bold bg-white/50" onClick={() => toast.info('Pick a category below')}>
+                          No, change
                         </Button>
                       </div>
-                    </>
+                    </div>
                   )}
                 </div>
               )}
@@ -439,10 +459,35 @@ export function SellerListingCreatePage() {
                   placeholder="0"
                 />
                 {similarRange && priceNum > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Similar products in this category often list around {formatTZS(similarRange.min)} –{' '}
-                    {formatTZS(similarRange.max)}.
-                  </p>
+                  <div className="rounded-xl bg-emerald-50 dark:bg-emerald-500/10 p-3 border border-emerald-100 dark:border-emerald-500/20">
+                    <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-400 mb-2">
+                      <Info className="w-3.5 h-3.5" />
+                      <span className="text-[11px] font-bold uppercase tracking-wider">Price Benchmark</span>
+                    </div>
+                    <div className="space-y-1.5">
+                      <div className="flex justify-between text-[11px] font-medium opacity-70">
+                        <span>Min: {formatTZS(similarRange.min)}</span>
+                        <span>Max: {formatTZS(similarRange.max)}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-emerald-200/30 dark:bg-emerald-500/5 rounded-full relative overflow-hidden">
+                         <div 
+                           className="absolute h-full bg-emerald-500 rounded-full transition-all duration-500"
+                           style={{ 
+                             left: `${Math.max(0, Math.min(100, (similarRange.min / similarRange.max) * 100))}%`,
+                             right: `${100 - Math.max(0, Math.min(100, (100)))}%`
+                           }}
+                         />
+                         {/* Marker for current price */}
+                         <div 
+                           className="absolute top-0 bottom-0 w-1 bg-primary z-20 shadow-[0_0_4px_rgba(var(--primary),0.5)]"
+                           style={{ left: `${Math.max(0, Math.min(100, (priceNum / similarRange.max) * 100))}%` }}
+                         />
+                      </div>
+                      <p className="text-[11px] text-emerald-800/80 dark:text-emerald-300/80 font-medium">
+                        SmartDalali hint: Similar items sell for {formatTZS(similarRange.min)} - {formatTZS(similarRange.max)}.
+                      </p>
+                    </div>
+                  </div>
                 )}
               </div>
               <div className="space-y-2">
@@ -501,7 +546,7 @@ export function SellerListingCreatePage() {
       )}
 
       {step === 3 && (
-        <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+        <motion.div key="step-3" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
           <Card className="border-0 shadow-md">
             <CardHeader>
               <CardTitle>Stock & details</CardTitle>
@@ -553,13 +598,27 @@ export function SellerListingCreatePage() {
                   {isVerified ? 'Continue' : 'Save draft'}
                 </Button>
               </div>
+
+              {!isVerified && (
+                <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20 mt-4">
+                  <CardContent className="pt-6 text-sm space-y-3">
+                    <p className="font-medium text-foreground">Your listing will be saved as a draft until you are verified.</p>
+                    <p className="text-muted-foreground">
+                      Complete identity verification to publish live listings and earn the verified badge.
+                    </p>
+                    <Button asChild>
+                      <Link href={routes.sellerVerification()}>Go to verification</Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              )}
             </CardContent>
           </Card>
         </motion.div>
       )}
 
       {step === 4 && isVerified && (
-        <motion.div initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
+        <motion.div key="step-4" initial={{ opacity: 0, x: 12 }} animate={{ opacity: 1, x: 0 }} className="space-y-4">
           <Card className="border-0 shadow-md overflow-hidden">
             <CardHeader>
               <CardTitle>Review & publish</CardTitle>
@@ -596,19 +655,7 @@ export function SellerListingCreatePage() {
         </motion.div>
       )}
 
-      {!isVerified && step === 3 && (
-        <Card className="border-amber-200 bg-amber-50/50 dark:bg-amber-950/20">
-          <CardContent className="pt-6 text-sm space-y-3">
-            <p className="font-medium text-foreground">Your listing will be saved as a draft until you are verified.</p>
-            <p className="text-muted-foreground">
-              Complete identity verification to publish live listings and earn the verified badge.
-            </p>
-            <Button asChild>
-              <Link href={routes.sellerVerification()}>Go to verification</Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
+      </AnimatePresence>
     </div>
   );
 }

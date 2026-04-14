@@ -18,8 +18,7 @@ from listings.models import Listing
 from marketplace.models import SellerProfile
 from core.services.notifications import BaseNotificationService, PushNotificationService
 from .models import (
-    SellerOnboardingProgress, SellerIDVerification, 
-    SellerBusinessVerification, SellerPayoutAccount
+    SellerOnboardingProgress, SellerPayoutAccount
 )
 
 logger = logging.getLogger(__name__)
@@ -290,16 +289,55 @@ def send_business_approval_notification_sync(seller_profile) -> None:
             fail_silently=True,
         )
 def get_onboarding_completion_percentage(progress) -> int:
-    """Calculate percentage of onboarding completion."""
-    steps = [
-        progress.step_registration,
-        progress.step_store_setup,
-        progress.step_id_submitted,
-        progress.step_id_approved,
-        progress.step_payout_added,
-        progress.step_first_product,
-    ]
-    return int(round((sum(1 for s in steps if s) / 6) * 100))
+    """
+    Calculate seller trust percentage based on user-refined rules:
+    - Step 1: Store Setup (10%)
+    - Step 2: First Product Listing (20%) - Big incentive to start selling
+    - Step 3: Identity Approval (30% for NIN, 15% for DL)
+    - Step 4: Payout Method Added (10%)
+    
+    Dashboard Mission Total: 70% (NIN) / 55% (DL)
+    
+    - Tier 2: TIN Verified (15%)
+    - Tier 2: Business License Verified (15%)
+    
+    Total (Max): 100%
+    """
+    score = 0
+    sp = progress.seller
+    uv = getattr(sp.user, 'verification', None)
+    
+    # 1. Store Basics (10%)
+    if progress.step_store_setup:
+        score += 10
+        
+    # 2. First Product (20%)
+    if progress.step_first_product:
+        score += 20
+        
+    # 3. Identity (Max 30%) - ONLY if approved AND mission reached (Step 2 done)
+    # This prevents buyer-verified users from jumping directly to 40% without listing items.
+    if progress.step_first_product and uv and uv.id_status == 'verified':
+        if uv.id_type == 'national_id':
+            score += 30
+        else:
+            score += 15
+    elif uv and uv.id_status in ['pending', 'verified']:
+        # Small 5% bonus for submitting/having ID, but capped until Step 2 is active
+        score += 5
+            
+    # 4. Payout (10%)
+    if progress.step_payout_added:
+        score += 10
+        
+    # Tier 2 (Upgrades - 30%)
+    if uv:
+        if uv.tin_status == 'verified':
+            score += 15
+        if uv.business_license_status == 'verified':
+            score += 15
+            
+    return min(100, score)
 
 def unpublish_seller_listings(user_id: int) -> int:
     """Unpublish all listings for a suspended or deleted seller."""
@@ -314,24 +352,18 @@ def approve_seller_identity(seller_profile, admin_user, notes=''):
     """
     Admin workflow to approve a seller's identity documents.
     """
-    iv = getattr(seller_profile, 'id_verification', None)
-    if not iv:
-        raise ValueError("No identity documents on file.")
+    from trust.models import UserVerification
+    from trust.services.verification_service import verify_user_document
+    
+    try:
+        uv = UserVerification.objects.select_for_update().get(user=seller_profile.user)
+    except UserVerification.DoesNotExist:
+        raise ValueError("No identity documents on file (UserVerification missing).")
         
-    now = timezone.now()
-    iv.reviewed_at = now
-    iv.reviewed_by = admin_user
-    iv.rejection_reason = ''
-    if notes:
-        iv.notes = notes
-    iv.save()
+    verify_user_document(uv, 'id', status='verified', notes=notes, admin_user=admin_user)
     
-    seller_profile.verification_status = 'verified'
-    seller_profile.is_verified = True
-    seller_profile.verified_at = now
-    seller_profile.is_active = True
-    seller_profile.save()
-    
+    # Reload profile to see synced status from signals
+    seller_profile.refresh_from_db()
     return seller_profile
 
 @transaction.atomic
@@ -339,21 +371,17 @@ def reject_seller_identity(seller_profile, admin_user, reason):
     """
     Admin workflow to reject a seller's identity documents.
     """
-    iv = getattr(seller_profile, 'id_verification', None)
-    if not iv:
+    from trust.models import UserVerification
+    from trust.services.verification_service import verify_user_document
+
+    try:
+        uv = UserVerification.objects.select_for_update().get(user=seller_profile.user)
+    except UserVerification.DoesNotExist:
         raise ValueError("No identity documents on file.")
         
-    now = timezone.now()
-    iv.reviewed_at = now
-    iv.reviewed_by = admin_user
-    iv.rejection_reason = reason
-    iv.save()
+    verify_user_document(uv, 'id', status='rejected', notes=reason, admin_user=admin_user)
     
-    seller_profile.verification_status = 'rejected'
-    seller_profile.is_verified = False
-    seller_profile.verified_at = None
-    seller_profile.save()
-    
+    seller_profile.refresh_from_db()
     return seller_profile
 @transaction.atomic
 def suspend_seller(seller_profile, admin_user, reason):
@@ -374,13 +402,33 @@ def suspend_seller(seller_profile, admin_user, reason):
 @transaction.atomic
 def reinstate_seller(seller_profile, admin_user, reason=''):
     """
-    Reinstate a previously suspended seller.
+    Reinstate a previously suspended seller, restoring status based on docs.
     """
-    seller_profile.verification_status = 'verified'
-    seller_profile.is_active = True
+    from trust.models import UserVerification
+    from trust.constants import UserVerificationStatus
+    from marketplace.constants import VerificationStatus
+
+    uv = getattr(seller_profile.user, 'verification', None)
+    if uv:
+        if uv.id_status == UserVerificationStatus.VERIFIED:
+            seller_profile.verification_status = VerificationStatus.VERIFIED
+            seller_profile.is_active = True
+        elif uv.id_status == UserVerificationStatus.PENDING:
+            seller_profile.verification_status = VerificationStatus.UNDER_REVIEW
+            seller_profile.is_active = False
+        elif uv.id_status == UserVerificationStatus.REJECTED:
+            seller_profile.verification_status = VerificationStatus.REJECTED
+            seller_profile.is_active = False
+        else:
+            seller_profile.verification_status = VerificationStatus.INCOMPLETE
+            seller_profile.is_active = False
+    else:
+        seller_profile.verification_status = VerificationStatus.INCOMPLETE
+        seller_profile.is_active = False
+
     seller_profile.suspended_at = None
     seller_profile.suspension_reason = ''
-    seller_profile.save()
+    seller_profile.save(update_fields=['verification_status', 'is_active', 'suspended_at', 'suspension_reason', 'updated_at'])
     
     return seller_profile
 
@@ -388,33 +436,26 @@ def reinstate_seller(seller_profile, admin_user, reason=''):
 def approve_seller_business(seller_profile, admin_user):
     """
     Admin workflow to approve a seller's business verification.
-    Increases limits and syncs business data.
     """
-    bv = getattr(seller_profile, 'business_verification', None)
-    if not bv or bv.status != 'pending':
+    from trust.models import UserVerification
+    from trust.services.verification_service import verify_user_document
+    
+    try:
+        uv = UserVerification.objects.select_for_update().get(user=seller_profile.user)
+    except UserVerification.DoesNotExist:
         return seller_profile
-        
-    now = timezone.now()
-    bv.status = 'approved'
-    bv.reviewed_at = now
-    bv.reviewed_by = admin_user
-    bv.rejection_reason = ''
-    bv.save()
+
+    # Approve both for tier-2 full upgrade
+    verify_user_document(uv, 'tin', status='verified', admin_user=admin_user)
+    verify_user_document(uv, 'license', status='verified', admin_user=admin_user)
     
-    seller_profile.business_name = bv.business_name or seller_profile.business_name
-    if bv.tin_number:
-        seller_profile.tax_id = bv.tin_number
-        
-    seller_profile.business_type = 'business'
-    seller_profile.is_business_verified = True
-    seller_profile.products_limit = 500
-    seller_profile.payout_limit = Decimal('0')
-    seller_profile.save()
-    
+    # Progress step is now derived from UserVerification in views, 
+    # but we can also set it explicitly if needed for legacy logic.
     progress, _ = SellerOnboardingProgress.objects.get_or_create(seller=seller_profile)
     progress.step_business_upgraded = True
     progress.save(update_fields=['step_business_upgraded'])
     
+    seller_profile.refresh_from_db()
     return seller_profile
 
 @transaction.atomic
@@ -422,15 +463,16 @@ def reject_seller_business(seller_profile, admin_user, reason):
     """
     Admin workflow to reject a seller's business verification.
     """
-    bv = getattr(seller_profile, 'business_verification', None)
-    if not bv or bv.status != 'pending':
+    from trust.models import UserVerification
+    from trust.services.verification_service import verify_user_document
+
+    try:
+        uv = UserVerification.objects.select_for_update().get(user=seller_profile.user)
+    except UserVerification.DoesNotExist:
         return seller_profile
         
-    now = timezone.now()
-    bv.status = 'rejected'
-    bv.reviewed_at = now
-    bv.reviewed_by = admin_user
-    bv.rejection_reason = reason
-    bv.save()
+    verify_user_document(uv, 'tin', status='rejected', notes=reason, admin_user=admin_user)
+    verify_user_document(uv, 'license', status='rejected', notes=reason, admin_user=admin_user)
     
+    seller_profile.refresh_from_db()
     return seller_profile

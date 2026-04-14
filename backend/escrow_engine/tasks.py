@@ -144,3 +144,103 @@ def release_delivered_marketplace_escrow_periodic():
             )
     logger.info('Triggered auto escrow release for %s transactions', count)
     return count
+@shared_task(name='escrow_engine.tasks.auto_resolve_unresponsive_seller_disputes_periodic')
+def auto_resolve_unresponsive_seller_disputes_periodic():
+    """
+    Protects buyers from unresponsive sellers.
+    1. At 24h: Sends a FINAL WARNING to the seller if they haven't uploaded evidence.
+    2. At 48h: Auto-refunds the buyer if no seller response is found.
+    """
+    from .models import Dispute, DisputeStatus
+    from .services import escrow as escrow_svc
+    from communications.models import Notification
+    
+    now = timezone.now()
+    warning_cutoff = now - timedelta(hours=24)
+    resolution_cutoff = now - timedelta(hours=48)
+    
+    # ── 1. Auto-Resolution (48h) ──────────────────────────────────────────────
+    unresponsive_disputes = Dispute.objects.filter(
+        status=DisputeStatus.OPEN,
+        created_at__lte=resolution_cutoff
+    ).select_related('transaction')
+    
+    refund_count = 0
+    for dispute in unresponsive_disputes:
+        seller = dispute.transaction.seller_user
+        # Check if seller has provided any evidence
+        seller_evidence_exists = dispute.evidence.filter(submitted_by=seller).exists()
+        
+        if not seller_evidence_exists:
+            try:
+                with db_transaction.atomic():
+                    # We reload to ensure it's still OPEN
+                    d = Dispute.objects.select_for_update().get(pk=dispute.pk)
+                    if d.status != DisputeStatus.OPEN:
+                        continue
+                        
+                    escrow_svc.refund_buyer(
+                        d.transaction,
+                        actor_label='System: Auto-Resolution',
+                        reason=f'Seller failed to respond within 48-hour dispute window. Dispute ID: {d.id}'
+                    )
+                    d.status = DisputeStatus.RESOLVED
+                    d.resolution_type = Dispute.Resolution.REFUND_BUYER
+                    d.resolution = 'Refunded automatically due to seller inactivity (48h timeout).'
+                    d.resolved_at = now
+                    d.save()
+                    refund_count += 1
+                    logger.info("Auto-refunded dispute %s due to seller inactivity.", d.id)
+            except Exception as e:
+                logger.error("Failed to auto-resolve dispute %s: %s", dispute.id, e)
+
+    # ── 2. Warning Alerts (24h) ────────────────────────────────────────────────
+    # Find disputes that reached 24h and haven't been warned yet
+    # We use a simple marker in Dispute metadata if available, 
+    # or just check if a notification exists for this seller+dispute.
+    
+    warning_eligible = Dispute.objects.filter(
+        status=DisputeStatus.OPEN,
+        created_at__lte=warning_cutoff,
+        created_at__gt=resolution_cutoff # haven't hit refund yet
+    ).select_related('transaction')
+
+    warn_count = 0
+    for dispute in warning_eligible:
+        seller = dispute.transaction.seller_user
+        if not seller: continue
+        
+        seller_evidence_exists = dispute.evidence.filter(submitted_by=seller).exists()
+        if not seller_evidence_exists:
+            # Check if we already sent an 'unresponsive_warning'
+            already_warned = Notification.objects.filter(
+                user=seller,
+                data__dispute_id=str(dispute.id),
+                type='dispute_warning'
+            ).exists()
+            
+            if not already_warned:
+                try:
+                    from core.services.notifications import BaseNotificationService
+                    notif_svc = BaseNotificationService()
+                    msg = (
+                        f"FINAL WARNING: You have 24 hours to respond to the dispute "
+                        f"for transaction {dispute.transaction.reference} or the buyer "
+                        f"will be automatically refunded."
+                    )
+                    notif_svc.create_db_notification(
+                        user=seller,
+                        type='dispute_warning',
+                        title="Urgent: Dispute Action Required",
+                        message=msg,
+                        data={'dispute_id': str(dispute.id), 'transaction_reference': dispute.transaction.reference}
+                    )
+                    # Also try SMS
+                    if hasattr(seller, 'profile') and seller.profile.phone_number:
+                        notif_svc.sms.service.send_sms(seller.profile.phone_number, f"SmartDalali: {msg}")
+                    
+                    warn_count += 1
+                except Exception as e:
+                    logger.error("Failed to send dispute warning for %s: %s", dispute.id, e)
+
+    return f"disputes_refunded={refund_count}, disputes_warned={warn_count}"

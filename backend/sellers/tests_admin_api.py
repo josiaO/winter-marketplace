@@ -14,10 +14,10 @@ from listings.models import Listing
 from marketplace.models import SellerProfile
 from sellers.models import (
     SellerActionLog,
-    SellerBusinessVerification,
-    SellerIDVerification,
     SellerOnboardingProgress,
 )
+from trust.models import UserVerification
+from trust.constants import UserVerificationStatus
 
 User = get_user_model()
 
@@ -46,12 +46,15 @@ class AdminSellerGovernanceAPITests(TestCase):
             verification_status='under_review',
         )
         SellerOnboardingProgress.objects.get_or_create(seller=self.sp)
-        SellerIDVerification.objects.create(
-            seller=self.sp,
-            id_type='national_id',
-            id_number='ABC123',
-            id_front_image=_img('front.jpg'),
-            selfie_with_id=_img('selfie.jpg'),
+        UserVerification.objects.update_or_create(
+            user=self.user,
+            defaults={
+                'id_type': 'national_id',
+                'id_number': 'ABC123',
+                'national_id_front': _img('front.jpg'),
+                'selfie_with_id': _img('selfie.jpg'),
+                'id_status': UserVerificationStatus.PENDING,
+            }
         )
 
     def test_queue_forbidden_non_staff(self):
@@ -167,10 +170,13 @@ class AdminSellerGovernanceAPITests(TestCase):
         self.sp.is_active = True
         self.sp.total_sales = Decimal('500000')
         self.sp.save()
-        SellerBusinessVerification.objects.create(
-            seller=self.sp,
-            business_name='Biz Co',
-            status='pending',
+        UserVerification.objects.update_or_create(
+            user=self.user,
+            defaults={
+                'tin_number': 'TIN123',
+                'tin_status': UserVerificationStatus.PENDING,
+                'business_license_status': UserVerificationStatus.PENDING,
+            }
         )
         self.client.force_authenticate(self.admin)
         url = reverse('sellers_admin:business-approve', kwargs={'pk': self.sp.pk})
@@ -178,7 +184,7 @@ class AdminSellerGovernanceAPITests(TestCase):
         self.assertEqual(r.status_code, status.HTTP_200_OK, r.data)
         self.sp.refresh_from_db()
         self.assertTrue(self.sp.is_business_verified)
-        self.assertEqual(self.sp.products_limit, 500)
+        self.assertEqual(self.sp.products_limit, 0) # Unlimited
         self.assertEqual(self.sp.payout_limit, Decimal('0'))
         self.assertTrue(
             SellerActionLog.objects.filter(
@@ -191,10 +197,13 @@ class AdminSellerGovernanceAPITests(TestCase):
         self.sp.verification_status = 'verified'
         self.sp.is_verified = True
         self.sp.save()
-        SellerBusinessVerification.objects.create(
-            seller=self.sp,
-            business_name='Biz Co',
-            status='pending',
+        UserVerification.objects.update_or_create(
+            user=self.user,
+            defaults={
+                'tin_number': 'TIN123',
+                'tin_status': UserVerificationStatus.PENDING,
+                'business_license_status': UserVerificationStatus.PENDING,
+            }
         )
         self.client.force_authenticate(self.admin)
         url = reverse('sellers_admin:business-reject', kwargs={'pk': self.sp.pk})

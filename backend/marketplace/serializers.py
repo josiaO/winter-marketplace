@@ -165,12 +165,25 @@ class MarketplaceItemSerializer(serializers.ModelSerializer):
 
 class SellerPaymentMethodSerializer(serializers.ModelSerializer):
     provider_name = serializers.CharField(source='get_provider_display', read_only=True)
-    account_number = serializers.CharField(source='masked_account_number', read_only=True)
+    # Allow writing account_number, but it will be masked in the representation
+    account_number = serializers.CharField(write_only=True)
+    masked_account_number = serializers.CharField(read_only=True)
 
     class Meta:
         model = SellerPaymentMethod
-        fields = ['id', 'provider', 'provider_name', 'account_name', 'account_number', 'is_active']
+        fields = [
+            'id', 'provider', 'provider_name', 'account_name', 
+            'account_number', 'masked_account_number', 'is_active'
+        ]
         read_only_fields = ['id']
+
+    def to_representation(self, instance):
+        """Override to provide masked_account_number as account_number for legacy frontend support if needed."""
+        data = super().to_representation(instance)
+        # For security, we never return the raw account_number in the representation
+        # We can also populate 'account_number' with the masked version for the frontend
+        data['account_number'] = instance.masked_account_number
+        return data
 
 
 def _normalized_verification_status(obj: SellerProfile) -> str:

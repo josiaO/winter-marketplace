@@ -204,11 +204,13 @@ class PaymentLinkSerializer(serializers.ModelSerializer):
 
 
 class RequestOTPSerializer(serializers.Serializer):
-    phone = serializers.CharField(max_length=30)
+    channel = serializers.ChoiceField(choices=['sms', 'email'], default='sms')
+    destination = serializers.CharField(max_length=100, help_text="Phone number or Email address")
 
 
 class VerifyOTPSerializer(serializers.Serializer):
-    phone = serializers.CharField(max_length=30)
+    channel = serializers.ChoiceField(choices=['sms', 'email'], default='sms')
+    destination = serializers.CharField(max_length=100)
     otp = serializers.CharField(max_length=8, min_length=4)
 
 

@@ -187,13 +187,19 @@ export function ProductCard({
 
         {/* Seller */}
         {!compact && (
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs text-muted-foreground">
-              by {sellerName}
-            </span>
-            {listing.seller?.is_verified && (
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
-            )}
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs text-muted-foreground font-medium">
+                by {sellerName}
+              </span>
+              {listing.seller?.is_verified ? (
+                <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 flex-shrink-0" />
+              ) : (
+                <Badge variant="outline" className="text-[9px] uppercase h-4 px-1 border-amber-200 bg-amber-50 text-amber-600 font-bold tracking-tighter">
+                  Unverified
+                </Badge>
+              )}
+            </div>
           </div>
         )}
 

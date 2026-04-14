@@ -25,31 +25,38 @@ def _format_relative_short(delta: timedelta) -> str:
 
 def seller_avg_response_time_hours(seller_id: int) -> float | None:
     """
-    Median hours for seller to reply after a buyer message (listing/order threads).
+    Median hours for seller to provide their VERY FIRST reply to a new conversation.
+    This is the strongest indicator of reliability for guest buyers.
     """
-    conv_ids = list(
-        Conversation.objects.filter(seller_id=seller_id, is_active=True).values_list('id', flat=True)[:500]
-    )
-    if not conv_ids:
+    convs = Conversation.objects.filter(seller_id=seller_id, is_active=True).only('id')[:500]
+    if not convs.exists():
         return None
 
     deltas = []
-    for conv_id in conv_ids:
-        msgs = list(
-            Message.objects.filter(conversation_id=conv_id, is_deleted=False)
-            .order_by('created_at')
-            .values_list('sender_id', 'created_at')[:200]
-        )
-        last_buyer_at = None
-        for sender_id, created_at in msgs:
-            if sender_id != seller_id:
-                last_buyer_at = created_at
-            elif last_buyer_at is not None:
-                deltas.append((created_at - last_buyer_at).total_seconds() / 3600.0)
-                last_buyer_at = None
+    for conv in convs:
+        # Get first buyer message
+        first_buyer = Message.objects.filter(
+            conversation=conv, 
+            is_deleted=False
+        ).exclude(sender_id=seller_id).order_by('created_at').first()
+        
+        if not first_buyer:
+            continue
+            
+        # Get first seller response AFTER that buyer message
+        first_reply = Message.objects.filter(
+            conversation=conv,
+            sender_id=seller_id,
+            is_deleted=False,
+            created_at__gt=first_buyer.created_at
+        ).order_by('created_at').first()
+        
+        if first_reply:
+            deltas.append((first_reply.created_at - first_buyer.created_at).total_seconds() / 3600.0)
 
     if not deltas:
         return None
+        
     deltas.sort()
     mid = len(deltas) // 2
     if len(deltas) % 2:
@@ -216,6 +223,16 @@ def build_seller_trust_block(listing) -> dict:
             }
         )
 
+    # Rating breakdown
+    breakdown = {i: 0 for i in range(1, 6)}
+    breakdown_qs = (
+        Review.objects.filter(listing=listing, is_approved=True, is_hidden=False)
+        .values('rating')
+        .annotate(count=Count('id'))
+    )
+    for row in breakdown_qs:
+        breakdown[row['rating']] = row['count']
+
     return {
         'seller_name': seller_name,
         'store_name': store_name,
@@ -231,4 +248,5 @@ def build_seller_trust_block(listing) -> dict:
         'seller_tier_label': tier_label,
         'reviews_preview': preview,
         'reviews_total': reviews_total,
+        'rating_breakdown': breakdown,
     }

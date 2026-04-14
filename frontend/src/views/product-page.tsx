@@ -368,6 +368,7 @@ export function ProductPage({ productId }: { productId: string }) {
     setIsReporting(true);
     try {
       await api.trust.createReport({
+        report_type: 'listing',
         listing: Number(productId),
         reason: reportReason,
         description: reportDescription.trim(),

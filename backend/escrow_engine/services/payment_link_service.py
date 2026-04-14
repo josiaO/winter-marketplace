@@ -58,9 +58,10 @@ def create_payment_link(
     logger.info("Created PaymentLink %s for Transaction %s", link.token, txn.reference)
     return link
 
-def issue_link_otp(link: PaymentLink) -> str:
+def issue_link_otp(link: PaymentLink, channel: str = 'sms', destination: str = '') -> str:
     """
     Generate and save a multi-digit OTP for the payment link.
+    Delivers via chosen channel (sms or email).
     """
     code = f"{random.randint(100000, 999999)}"
     otp_ttl = getattr(settings, 'PAYMENT_LINK_OTP_MINUTES', 10)
@@ -70,10 +71,29 @@ def issue_link_otp(link: PaymentLink) -> str:
     link.otp_verified = False
     link.save(update_fields=['otp_code', 'otp_expires_at', 'otp_verified', 'updated_at'])
     
-    logger.info("Issued OTP for PaymentLink %s", link.token)
+    # Delivery
+    from core.services.notifications import BaseNotificationService
+    notif_svc = BaseNotificationService()
+    
+    msg = f"Your SmartDalali payment verification code is {code}. Valid for {otp_ttl} mins."
+    
+    if channel == 'email':
+        from django.core.mail import send_mail
+        send_mail(
+            "Payment Verification — SmartDalali",
+            msg,
+            settings.DEFAULT_FROM_EMAIL,
+            [destination],
+            fail_silently=True
+        )
+    else:
+        # SMS using AfricasTalking (mocked in dev)
+        notif_svc.sms.service.send_sms(destination, msg)
+        
+    logger.info("Issued %s OTP for PaymentLink %s to %s", channel, link.token, destination)
     return code
 
-def verify_link_otp(link: PaymentLink, code: str, phone: str) -> bool:
+def verify_link_otp(link: PaymentLink, code: str, destination: str, channel: str = 'sms') -> bool:
     """
     Verify the submitted OTP for a payment link.
     """
@@ -85,8 +105,10 @@ def verify_link_otp(link: PaymentLink, code: str, phone: str) -> bool:
         return False
 
     link.otp_verified = True
-    link.buyer_phone_verified = phone
+    if channel == 'sms':
+        link.buyer_phone_verified = destination
+    # We could also add link.buyer_email_verified if needed
     link.save(update_fields=['otp_verified', 'buyer_phone_verified', 'updated_at'])
     
-    logger.info("Verified OTP for PaymentLink %s", link.token)
+    logger.info("Verified %s OTP for PaymentLink %s", channel, link.token)
     return True

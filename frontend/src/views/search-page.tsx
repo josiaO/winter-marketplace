@@ -108,7 +108,11 @@ export function SearchPage() {
         const rows = res.results || [];
         setTotalCount(res.count || 0);
         setHasMore(!!res.next);
-        setResults((prev) => (page === 1 ? rows : [...prev, ...rows]));
+        setResults((prev) => {
+          const combined = page === 1 ? rows : [...prev, ...rows];
+          // Deduplicate by ID to prevent duplicate React keys
+          return Array.from(new Map(combined.map((item) => [item.id, item])).values());
+        });
       } catch {
         if (cancelled) return;
         toast.error('Failed to fetch results');

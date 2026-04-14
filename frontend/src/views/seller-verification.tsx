@@ -35,7 +35,7 @@ type IdentityStatus = 'not_started' | 'under_review' | 'verified' | 'rejected' |
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function getStatusConfig(status: VerificationStatus) {
+function getStatusConfig(status: VerificationStatus | string) {
   switch (status) {
     case 'verified':
       return {
@@ -46,6 +46,7 @@ function getStatusConfig(status: VerificationStatus) {
         label: 'Verified',
         progress: 100,
       };
+    case 'under_review':
     case 'pending':
       return {
         icon: ShieldAlert,
@@ -64,6 +65,17 @@ function getStatusConfig(status: VerificationStatus) {
         label: 'Rejected',
         progress: 25,
       };
+    case 'suspended':
+      return {
+        icon: X,
+        color: 'text-red-700 dark:text-red-500',
+        bg: 'bg-red-200 dark:bg-red-900/50',
+        badgeColor: 'bg-red-200 text-red-900 dark:bg-red-900 dark:text-red-200',
+        label: 'Suspended',
+        progress: 10,
+      };
+    case 'incomplete':
+    case 'pending_id':
     case 'unverified':
     default:
       return {
@@ -77,14 +89,19 @@ function getStatusConfig(status: VerificationStatus) {
   }
 }
 
-function getStatusExplanation(status: VerificationStatus): string {
+function getStatusExplanation(status: VerificationStatus | string): string {
   switch (status) {
     case 'verified':
       return 'Your seller account has been fully verified. You have access to all seller features and your listings will display a verified badge.';
+    case 'under_review':
     case 'pending':
       return 'Your verification documents are being reviewed. This typically takes 1-3 business days. You can still sell, but your verified badge will appear once approved.';
     case 'rejected':
       return 'Your verification was rejected. Please review the feedback and resubmit the required documents. Contact support if you need assistance.';
+    case 'suspended':
+      return 'Your seller account has been suspended by an administrator. Please contact support to resolve this issue.';
+    case 'incomplete':
+    case 'pending_id':
     case 'unverified':
     default:
       return 'Complete the verification process to unlock all seller features and gain buyer trust with a verified badge on your listings.';

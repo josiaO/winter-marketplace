@@ -65,6 +65,17 @@ def add_to_cart(cart: Cart, listing_id: int, quantity: int = 1) -> CartItem:
 
         return cart_item
 
+def batch_add_to_cart(cart: Cart, items: list[dict]) -> list[CartItem]:
+    """Adds multiple listings to the cart in a single atomic transaction."""
+    added_items = []
+    with transaction.atomic():
+        for item in items:
+            listing_id = item.get('listing_id')
+            quantity = int(item.get('quantity', 1))
+            if listing_id:
+                added_items.append(add_to_cart(cart, listing_id, quantity))
+    return added_items
+
 def validate_stock_availability(listing: Listing, required_quantity: int, cart=None, is_update=False):
     """
     Checks if the required quantity is available, accounting for 

@@ -58,19 +58,19 @@ function tabFilter(tab: string, o: Order): boolean {
 
 function statusTone(order: Order): { ring: string; badge: string; label: string } {
   if (order.status === 'disputed') {
-    return { ring: 'ring-red-200', badge: 'bg-red-100 text-red-800', label: 'Disputed' };
+    return { ring: 'ring-red-100 dark:ring-red-900/30', badge: 'bg-red-100 text-red-800 dark:bg-red-400/20 dark:text-red-400', label: 'Disputed' };
   }
   if (order.status === 'pending') {
-    return { ring: 'ring-blue-200', badge: 'bg-blue-100 text-blue-800', label: 'Awaiting payment' };
+    return { ring: 'ring-blue-100 dark:ring-blue-900/30', badge: 'bg-blue-50 text-blue-700 dark:bg-blue-400/20 dark:text-blue-400', label: 'Awaiting payment' };
   }
   if (order.status === 'confirmed' || order.status === 'processing') {
-    return { ring: 'ring-amber-200', badge: 'bg-amber-100 text-amber-900', label: 'Needs shipment' };
+    return { ring: 'ring-orange-100 dark:ring-orange-900/30', badge: 'bg-orange-100 text-orange-900 dark:bg-orange-400/20 dark:text-orange-400', label: 'Action: Ship now' };
   }
   if (order.status === 'shipped' || order.status === 'arrived') {
-    return { ring: 'ring-sky-200', badge: 'bg-sky-100 text-sky-900', label: 'In transit' };
+    return { ring: 'ring-sky-100 dark:ring-sky-900/30', badge: 'bg-sky-50 text-sky-700 dark:bg-sky-400/20 dark:text-sky-400', label: 'In transit' };
   }
   if (order.status === 'delivered' || order.status === 'completed') {
-    return { ring: 'ring-emerald-200', badge: 'bg-emerald-100 text-emerald-900', label: 'Completed' };
+    return { ring: 'ring-emerald-100 dark:ring-emerald-900/30', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-400/20 dark:text-emerald-400', label: 'Completed' };
   }
   return { ring: 'ring-border', badge: 'bg-muted text-foreground', label: getStatusLabel(order.status) };
 }
@@ -204,61 +204,65 @@ export function SellerOrdersPage() {
             const cta = primaryCta(order);
             return (
               <motion.div key={order.id} layout initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
-                <Card className={`overflow-hidden border-0 shadow-md ring-2 ${tone.ring} shadow-black/5`}>
+                <Card className={`overflow-hidden border-0 shadow-lg shadow-black/[0.02] ring-1 ${tone.ring} bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm transition-all hover:shadow-xl hover:ring-primary/20`}>
                   <CardContent className="p-0">
-                    <Link href={routes.sellerOrder(String(order.id))} className="block p-4 sm:p-5 hover:bg-muted/30">
-                      <div className="flex flex-col sm:flex-row gap-4">
-                        <div className="w-full sm:w-24 h-24 rounded-xl bg-muted overflow-hidden shrink-0 relative">
+                    <Link href={routes.sellerOrder(String(order.id))} className="block p-5 sm:p-6 group">
+                      <div className="flex flex-col sm:flex-row gap-5">
+                        <div className="w-full sm:w-28 h-28 rounded-2xl bg-muted overflow-hidden shrink-0 relative shadow-inner ring-1 ring-black/5">
                           {img ? (
-                            <img src={img} alt="" className="w-full h-full object-cover" />
+                            <img src={img} alt="" className="w-full h-full object-contain group-hover:scale-105 transition-transform duration-500" />
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <ImageOff className="w-8 h-8 text-muted-foreground/40" />
+                              <ImageOff className="w-8 h-8 text-muted-foreground/30" />
                             </div>
                           )}
                         </div>
-                        <div className="flex-1 min-w-0 space-y-2">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="font-semibold text-foreground">#{orderNumberLabel(order)}</span>
-                            <Badge className={tone.badge}>{tone.label}</Badge>
+                        <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between gap-2">
+                               <div className="flex items-center gap-2">
+                                 <span className="font-bold text-foreground text-sm tracking-tight opacity-70">#{orderNumberLabel(order)}</span>
+                                 <Badge className={`${tone.badge} border-0 font-bold px-2 py-0.5 rounded-md text-[11px]`}>{tone.label}</Badge>
+                               </div>
+                               <span className="text-xs font-bold text-muted-foreground/60">{getRelativeTime(order.created_at)}</span>
+                            </div>
+                            <h3 className="text-lg font-bold text-foreground leading-tight line-clamp-1">{title}</h3>
+                            <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs font-bold text-muted-foreground/80">
+                              <span className="flex items-center gap-1.5">
+                                <Package className="w-3.5 h-3.5 opacity-40" />
+                                {buyerLabel(order)}
+                              </span>
+                              <span className="flex items-center gap-1.5 truncate max-w-[150px]">
+                                <MapPin className="w-3.5 h-3.5 opacity-40" />
+                                {order.shipping_address?.split(',').slice(-1).join(',').trim() || 'TZ'}
+                              </span>
+                            </div>
                           </div>
-                          <p className="text-sm text-foreground font-medium truncate">{title}</p>
-                          <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                            <span className="flex items-center gap-1">
-                              <Package className="w-3.5 h-3.5" />
-                              {buyerLabel(order)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <MapPin className="w-3.5 h-3.5" />
-                              {order.shipping_address?.split(',').slice(-2).join(',').trim() || '—'}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3.5 h-3.5" />
-                              {getRelativeTime(order.created_at, 'long')}
-                            </span>
+                          <div className="flex items-center justify-between mt-auto pt-4 border-t border-black/5 dark:border-white/5">
+                             <p className="text-xl font-black text-foreground">{formatTZS(orderTotalAmount(order))}</p>
+                             <div className="flex gap-2">
+                               {order.status === 'disputed' && (
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   className="border-red-500/50 text-red-600 font-bold h-9 rounded-xl"
+                                   onClick={(e) => {
+                                     e.preventDefault();
+                                     setRespondDisputeDialogOrder(order);
+                                   }}
+                                 >
+                                   <ShieldAlert className="w-4 h-4 mr-1.5" />
+                                   Evidence
+                                 </Button>
+                               )}
+                               <Button size="sm" className="font-bold h-9 rounded-xl shadow-md shadow-primary/20">
+                                 {cta.label}
+                               </Button>
+                             </div>
                           </div>
-                          <p className="text-lg font-bold text-foreground">{formatTZS(orderTotalAmount(order))}</p>
                         </div>
                       </div>
                     </Link>
-                    <div className="flex flex-wrap gap-2 px-4 sm:px-5 pb-4">
-                      <Button asChild className="flex-1 sm:flex-none">
-                        <Link href={cta.href}>{cta.label}</Link>
-                      </Button>
-                      {order.status === 'disputed' && (
-                        <Button
-                          variant="outline"
-                          className="flex-1 sm:flex-none border-orange-400 text-orange-700"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            setRespondDisputeDialogOrder(order);
-                          }}
-                        >
-                          <ShieldAlert className="w-4 h-4 mr-1" />
-                          Upload evidence
-                        </Button>
-                      )}
-                    </div>
                   </CardContent>
                 </Card>
               </motion.div>

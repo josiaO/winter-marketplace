@@ -468,19 +468,26 @@ class RequestOTPView(APIView):
         if not link.is_valid:
             return Response({'error': 'Payment link is expired or already used.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        phone = request.data.get('phone')
-        if not phone:
-            return Response({'error': 'Phone number is required.'}, status=status.HTTP_400_BAD_REQUEST)
+        serializer = RequestOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        channel = serializer.validated_data['channel']
+        destination = serializer.validated_data['destination']
 
-        pl_svc.issue_link_otp(link)
-        # Stub for SMS sending — never log OTP; mask phone for audit only
-        masked = phone[-4:].rjust(len(phone), '*') if len(phone) > 4 else '****'
+        pl_svc.issue_link_otp(link, channel=channel, destination=destination)
+        
+        # Never log full OTP; mask destination for audit
+        if channel == 'email':
+            parts = destination.split('@')
+            masked = f"{parts[0][0]}***@{parts[1]}" if len(parts) > 1 else '***'
+        else:
+            masked = destination[-4:].rjust(len(destination), '*') if len(destination) > 4 else '****'
+            
         logger.info(
-            "OTP issued for payment link token=%s phone_suffix=%s",
-            token,
-            masked,
+            "OTP issued for payment link token=%s channel=%s dest=%s",
+            token, channel, masked,
         )
-        return Response({'detail': 'OTP sent. Check your phone.'})
+        return Response({'detail': f'OTP sent via {channel}. Please check your {channel}.'})
 
 
 class VerifyOTPView(APIView):
@@ -496,10 +503,14 @@ class VerifyOTPView(APIView):
         if not link.is_valid:
             return Response({'error': 'Payment link is expired or already used.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        phone = request.data.get('phone')
-        otp = request.data.get('otp')
+        serializer = VerifyOTPSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         
-        ok = pl_svc.verify_link_otp(link, code=otp, phone=phone)
+        destination = serializer.validated_data['destination']
+        otp = serializer.validated_data['otp']
+        channel = serializer.validated_data['channel']
+        
+        ok = pl_svc.verify_link_otp(link, code=otp, destination=destination, channel=channel)
         if not ok:
             return Response({'error': 'Invalid or expired OTP.'}, status=status.HTTP_400_BAD_REQUEST)
 

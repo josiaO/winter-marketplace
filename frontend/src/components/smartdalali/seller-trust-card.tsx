@@ -60,32 +60,67 @@ export function SellerTrustCard({
       </div>
 
       {pct != null && (
-        <div>
+        <div className="space-y-1">
           <div className="flex justify-between text-xs mb-1">
             <span className="text-muted-foreground">Completion rate</span>
-            <span className="font-medium tabular-nums">{pct}%</span>
+            <span className="font-medium tabular-nums text-emerald-600 dark:text-emerald-400">{pct}%</span>
           </div>
           <div className="h-2 rounded-full bg-muted overflow-hidden">
             <div
-              className={cn('h-full rounded-full transition-all', completionBarClass(trust.completion_bar_tier))}
+              className={cn('h-full rounded-full transition-all duration-1000 ease-out', completionBarClass(trust.completion_bar_tier))}
               style={{ width: `${barWidth}%` }}
             />
           </div>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
+          <p className="text-[11px] text-muted-foreground">
             Completed {pct}% of orders successfully
           </p>
         </div>
       )}
 
-      <div className="grid gap-1 text-xs text-muted-foreground">
+      {/* Rating Breakdown */}
+      {trust.rating_breakdown && (
+        <div className="space-y-1.5 pt-1">
+          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Rating Breakdown</p>
+          <div className="space-y-1">
+            {Object.entries(trust.rating_breakdown)
+              .sort(([a], [b]) => Number(b) - Number(a))
+              .map(([rating, count]) => {
+                const total = trust.reviews_total || 1;
+                const width = Math.round((Number(count) / total) * 100);
+                return (
+                  <div key={rating} className="flex items-center gap-2 text-[10px]">
+                    <span className="w-3 text-center">{rating}</span>
+                    <Star className="w-2.5 h-2.5 fill-amber-400 text-amber-400" />
+                    <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
+                      <div className="h-full bg-amber-400 rounded-full" style={{ width: `${width}%` }} />
+                    </div>
+                    <span className="w-4 text-right text-muted-foreground">{count}</span>
+                  </div>
+                );
+              })}
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-1.5 text-xs text-muted-foreground pt-1">
         {trust.last_shipped_text && (
-          <p className={trust.last_shipped_stale ? 'text-amber-600 dark:text-amber-400 font-medium' : ''}>
+          <div className={cn("flex items-center gap-2", trust.last_shipped_stale ? 'text-amber-600 dark:text-amber-400 font-medium' : '')}>
+            <div className={cn("w-1.5 h-1.5 rounded-full", trust.last_shipped_stale ? 'bg-amber-500' : 'bg-emerald-500')} />
             {trust.last_shipped_text}
-            {trust.last_shipped_stale && ' — This seller has not shipped recently'}
-          </p>
+          </div>
         )}
-        {trust.joined_text && <p>{trust.joined_text}</p>}
-        {trust.response_time_text && <p>{trust.response_time_text}</p>}
+        {trust.joined_text && (
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-blue-400" />
+            {trust.joined_text}
+          </div>
+        )}
+        {trust.response_time_text && (
+          <div className="flex items-center gap-2">
+            <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
+            {trust.response_time_text}
+          </div>
+        )}
       </div>
 
       <div className="flex items-center justify-between text-xs">

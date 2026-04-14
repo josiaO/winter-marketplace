@@ -194,18 +194,9 @@ def _send_otp_email(user, code: str, purpose: str):
 
 
 def _send_otp_sms(user, code: str, purpose: str):
-    """Helper to send the OTP via SMS using Twilio."""
+    """Helper to send the OTP via SMS using AfricasTalking."""
     from core.services.notifications import SMSNotificationService
     
-    # Simple message template
-    templates = {
-        'verify_email': f"Your SmartDalali verification code is: {code}. Valid for {OTP_EXPIRY_MINUTES} mins.",
-        'password_reset': f"SmartDalali Password Reset: {code}. Valid for {OTP_EXPIRY_MINUTES} mins.",
-        'confirm_action': f"SmartDalali Confirmation Code: {code}.",
-        'delete_account': f"CRITICAL: Account Deletion Code: {code}. PERMANENT ACTION.",
-    }
-    
-    body = templates.get(purpose, f"Your SmartDalali OTP is: {code}")
     phone = getattr(user, 'profile', None).phone_number if hasattr(user, 'profile') else None
     
     if not phone:
@@ -214,16 +205,8 @@ def _send_otp_sms(user, code: str, purpose: str):
 
     try:
         sms_service = SMSNotificationService()
-        # Twilio client handles the actual sending
-        if sms_service.client:
-            sms_service.client.messages.create(
-                body=body,
-                from_=sms_service.from_number,
-                to=phone
-            )
-            logger.info(f"OTP SMS sent to {phone} for user {user.username}")
-        else:
-            # Fallback to console for dev mimicking production
-            print(f"\n[DEVELOPMENT SMS MIMIC]\nTo: {phone}\nBody: {body}\n")
+        # SMSNotificationService now wraps AfricasTalking (mocked in dev)
+        sms_service.send_otp(phone, code)
+        logger.info(f"OTP SMS enqueued to {phone} for user {user.username}")
     except Exception as e:
         logger.error(f"Failed to send OTP SMS to {phone}: {e}")

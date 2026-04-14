@@ -16,32 +16,55 @@ from core.models.base import BaseModel
 
 class UserVerification(BaseModel):
     """Enhanced trust verification for sellers (TIN, National ID, Business License)."""
-    STATUS_CHOICES = UserVerificationStatus.choices
-
+    
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='verification')
 
-    # National ID
-    national_id_number = models.CharField(max_length=50, blank=True, null=True)
+    # National ID / Passport
+    ID_TYPE_CHOICES = (
+        ('national_id', _('National ID')),
+        ('passport', _('Passport')),
+        ('voters_card', _("Voter's card")),
+        ('driving_license', _('Driving license')),
+    )
+    id_type = models.CharField(max_length=30, choices=ID_TYPE_CHOICES, blank=True, null=True)
+    id_number = models.CharField(max_length=50, blank=True, null=True) # Unified field
+    
     national_id_front = models.FileField(upload_to='verifications/id/', blank=True, null=True)
     national_id_back = models.FileField(upload_to='verifications/id/', blank=True, null=True)
-    id_status = models.CharField(max_length=20, choices=UserVerificationStatus.choices, default=UserVerificationStatus.NOT_SUBMITTED)
+    selfie_with_id = models.ImageField(upload_to='verifications/selfies/', blank=True, null=True)
+    
+    id_status = models.CharField(
+        max_length=20, 
+        choices=UserVerificationStatus.choices, 
+        default=UserVerificationStatus.NOT_SUBMITTED
+    )
 
     # TIN
     tin_number = models.CharField(max_length=50, blank=True, null=True)
-    tin_certificate = models.FileField(upload_to='verifications/tin/', blank=True, null=True)
-    tin_status = models.CharField(max_length=20, choices=UserVerificationStatus.choices, default=UserVerificationStatus.NOT_SUBMITTED)
+    tin_certificate = models.FileField(upload_to='verifications/id/', blank=True, null=True) # Unified path
+    tin_status = models.CharField(
+        max_length=20, 
+        choices=UserVerificationStatus.choices, 
+        default=UserVerificationStatus.NOT_SUBMITTED
+    )
 
     # Business License
     business_license_number = models.CharField(max_length=50, blank=True, null=True)
-    business_license_document = models.FileField(upload_to='verifications/license/', blank=True, null=True)
-    business_license_status = models.CharField(max_length=20, choices=UserVerificationStatus.choices, default=UserVerificationStatus.NOT_SUBMITTED)
+    business_license_document = models.FileField(upload_to='verifications/id/', blank=True, null=True) # Unified path
+    business_license_status = models.CharField(
+        max_length=20, 
+        choices=UserVerificationStatus.choices, 
+        default=UserVerificationStatus.NOT_SUBMITTED
+    )
 
     # Global verification status
     is_identity_verified = models.BooleanField(default=False)
+    is_business_verified = models.BooleanField(default=False) # Tier 2
     verification_date = models.DateTimeField(null=True, blank=True)
 
     # Legacy field - keeping for compatibility
     document_type = models.CharField(max_length=50, blank=True)
+    national_id_number = models.CharField(max_length=50, blank=True, null=True) # Kept for migration
 
     # Admin review
     reviewer_notes = models.TextField(blank=True, null=True)

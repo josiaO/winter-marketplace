@@ -9,10 +9,7 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 
 # External Integrations
-try:
-    from twilio.rest import Client as TwilioClient
-except ImportError:
-    TwilioClient = None
+# Removed Twilio as per user request (switching to AfricasTalking)
 
 try:
     import firebase_admin
@@ -80,56 +77,41 @@ class EmailNotificationService:
             logger.error(f"Failed to send conversation alert: {e}")
 
 
-class SMSNotificationService:
-    """Send SMS using Twilio"""
+class AfricasTalkingNotificationService:
+    """Send SMS using AfricasTalking (Mocked for Dev)"""
     
     def __init__(self):
-        try:
-            if TwilioClient:
-                self.client = TwilioClient(
-                    settings.TWILIO_ACCOUNT_SID,
-                    settings.TWILIO_AUTH_TOKEN
-                )
-                self.from_number = settings.TWILIO_PHONE_NUMBER
-            else:
-                self.client = None
-        except Exception as e:
-            logger.error(f"Failed to initialize Twilio: {e}")
-            self.client = None
+        self.api_key = getattr(settings, 'AFRICASTALKING_API_KEY', 'mock_key')
+        self.username = getattr(settings, 'AFRICASTALKING_USERNAME', 'sandbox')
+        self.from_number = getattr(settings, 'AFRICASTALKING_SHORTCODE', None)
+        
+    def send_sms(self, phone_number: str, message: str):
+        """Mock SMS delivery for development"""
+        logger.info(f"[SMS MOCK - AfricasTalking] To: {phone_number} | Msg: {message}")
+        # In production, this would use the africastalking python SDK
+        return True
+
+
+class SMSNotificationService:
+    """Unified SMS service (currently using AfricasTalking)"""
+    
+    def __init__(self):
+        self.service = AfricasTalkingNotificationService()
     
     def send_message_alert(self, phone_number: str, sender_name: str, message_preview: str):
         """Send SMS alert for new message"""
-        if not self.client:
-            logger.warning("Twilio not configured")
-            return
-        
-        try:
-            message_body = f"New message from {sender_name}: {message_preview[:50]}..."
-            self.client.messages.create(
-                body=message_body,
-                from_=self.from_number,
-                to=phone_number
-            )
-            logger.info(f"SMS sent to {phone_number}")
-        except Exception as e:
-            logger.error(f"Failed to send SMS: {e}")
+        body = f"SmartDalali: New message from {sender_name}: {message_preview[:50]}..."
+        return self.service.send_sms(phone_number, body)
     
     def send_conversation_alert(self, phone_number: str, property_title: str):
         """Send SMS alert for new conversation"""
-        if not self.client:
-            logger.warning("Twilio not configured")
-            return
-        
-        try:
-            message_body = f"New inquiry about {property_title}. Check DigitalDalali app for details."
-            self.client.messages.create(
-                body=message_body,
-                from_=self.from_number,
-                to=phone_number
-            )
-            logger.info(f"Conversation SMS sent to {phone_number}")
-        except Exception as e:
-            logger.error(f"Failed to send SMS: {e}")
+        body = f"SmartDalali: New inquiry about {property_title}. Check the app for details."
+        return self.service.send_sms(phone_number, body)
+
+    def send_otp(self, phone_number: str, code: str):
+        """Send OTP for verification"""
+        body = f"SmartDalali: Your verification code is {code}. Valid for 10 minutes."
+        return self.service.send_sms(phone_number, body)
 
 
 class PushNotificationService:

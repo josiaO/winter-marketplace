@@ -234,14 +234,6 @@ class AccountService:
             message = f"{user.username} is now a seller"
             is_now_seller = True
 
-        # Auto-verify in DEBUG mode to allow immediate listing/checkout in simulation
-        if getattr(settings, 'DEBUG', False) and is_now_seller:
-            try:
-                from marketplace.services.seller_service import SellerService
-                SellerService.verify_by_admin(profile)
-            except Exception as e:
-                logger.warning(f"Failed to auto-verify seller {user.username}: {e}")
-
         return is_now_seller, message
 
     @staticmethod

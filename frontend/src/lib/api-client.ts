@@ -977,6 +977,14 @@ class ApiClient {
     /** POST /admin/sellers/:id/identity/reject/ */
     adminVerifyReject: (id: number | string, payload: { reason: string }): Promise<any> =>
       this.post(`/admin/sellers/${id}/identity/reject/`, payload),
+
+    /** POST /admin/sellers/:id/verification/business/approve/ (admin) */
+    adminVerifyBusinessApprove: (id: number | string): Promise<any> =>
+      this.post(`/admin/sellers/${id}/verification/business/approve/`),
+
+    /** POST /admin/sellers/:id/verification/business/reject/ (admin) */
+    adminVerifyBusinessReject: (id: number | string, payload: { reason: string }): Promise<any> =>
+      this.post(`/admin/sellers/${id}/verification/business/reject/`, payload),
   };
 
   // ===========================================================================

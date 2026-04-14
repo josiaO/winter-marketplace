@@ -68,7 +68,7 @@ type PayoutFormData = z.infer<typeof payoutFormSchema>;
 // ─── Mobile Money Channels ────────────────────────────────────────────────────
 
 const MOBILE_CHANNELS = [
-  { id: 'm_pesa', name: 'M-Pesa', channel: 'm_pesa' as PaymentChannel },
+  { id: 'mpesa', name: 'M-Pesa', channel: 'mpesa' as PaymentChannel },
   { id: 'tigo_pesa', name: 'Tigo Pesa', channel: 'tigo_pesa' as PaymentChannel },
   { id: 'airtel_money', name: 'Airtel Money', channel: 'airtel_money' as PaymentChannel },
   { id: 'halopesa', name: 'Halopesa', channel: 'halopesa' as PaymentChannel },
@@ -147,19 +147,23 @@ export function SellerPaymentMethodPage() {
   const onSubmit = async (data: PayoutFormData) => {
     setIsSaving(true);
     try {
-      // Store payout preferences under marketplace payment-methods.
-      // Backend syncs preferences into escrow_engine payout destination.
-      const payoutDetails: Record<string, unknown> =
+      // Map frontend form fields to backend SellerPaymentMethod structure
+      const payload: Record<string, unknown> =
         data.method === 'mobile_money'
-          ? { method: 'mobile_money', channel: data.channel, phone_number: data.phone_number }
+          ? {
+              provider: data.channel,
+              account_number: data.phone_number,
+              // Fallback to business name or username if account_name isn't in form
+              account_name: sellerProfile?.business_name || user.username || 'Mobile Account',
+            }
           : {
-              method: 'bank_transfer',
-              bank_name: data.bank_name,
+              provider: 'bank',
               account_number: data.account_number,
-              account_name: data.account_name,
+              // For bank, we might want to store bank name in account_name or elsewhere
+              account_name: `${data.bank_name} - ${data.account_name}`,
             };
 
-      await api.marketplace.sellerPaymentMethods.create(payoutDetails);
+      await api.marketplace.sellerPaymentMethods.create(payload);
 
       toast.success('Payout method updated successfully!');
       // Refresh user

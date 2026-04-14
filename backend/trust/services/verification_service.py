@@ -81,10 +81,20 @@ def verify_user_document(verification, doc_type, status='verified', notes='', ad
         if status == 'verified':
             verification.is_identity_verified = True
             verification.verification_date = timezone.now()
+        else:
+            verification.is_identity_verified = False
+            
     elif doc_type == 'tin':
         verification.tin_status = status
     elif doc_type == 'license':
         verification.business_license_status = status
+    
+    # Update global business verified status
+    # Note: Logic can be adjusted (e.g. requires BOTH tin and license verified)
+    if verification.tin_status == 'verified' and verification.business_license_status == 'verified':
+        verification.is_business_verified = True
+    else:
+        verification.is_business_verified = False
     
     if notes:
         verification.reviewer_notes = notes

@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from marketplace.models import SellerProfile
-from sellers.models import SellerBusinessVerification, SellerIDVerification, SellerPayoutAccount
+from sellers.models import SellerPayoutAccount
 from sellers.validators import (
     validate_business_certificate_upload,
     validate_id_front_upload,
@@ -45,6 +45,16 @@ class StoreSetupSerializer(serializers.Serializer):
     store_description = serializers.CharField(required=False, allow_blank=True, default='')
     store_logo = serializers.ImageField(required=False, allow_null=True)
     store_banner = serializers.ImageField(required=False, allow_null=True)
+    
+    # Business Contacts
+    business_email = serializers.EmailField(required=False, allow_blank=True, default='')
+    business_phone = serializers.CharField(max_length=20, required=False, allow_blank=True, default='')
+    business_address = serializers.CharField(max_length=500, required=False, allow_blank=True, default='')
+    
+    # Notification Preferences
+    notification_orders = serializers.BooleanField(required=False, default=True)
+    notification_messages = serializers.BooleanField(required=False, default=True)
+    notification_reviews = serializers.BooleanField(required=False, default=True)
 
     def validate_store_categories(self, value):
         if not value:
@@ -91,9 +101,16 @@ class StoreSetupSerializer(serializers.Serializer):
 
 
 class IdentityVerificationSerializer(serializers.Serializer):
-    id_type = serializers.ChoiceField(choices=[c[0] for c in SellerIDVerification.ID_TYPE_CHOICES])
+    # Mapping to UserVerification choices
+    id_type = serializers.ChoiceField(choices=[
+        ('national_id', 'National ID'),
+        ('passport', 'Passport'),
+        ('voters_card', "Voter's card"),
+        ('driving_license', 'Driving license'),
+    ])
     id_number = serializers.CharField(max_length=50, allow_blank=False)
     id_front_image = serializers.ImageField()
+    id_back_image = serializers.ImageField(required=False, allow_null=True)
     selfie_with_id = serializers.ImageField()
 
     def validate_id_front_image(self, f):
@@ -121,12 +138,21 @@ class BusinessVerificationSerializer(serializers.Serializer):
         max_length=100, required=False, allow_blank=True, default=''
     )
     tin_number = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    business_certificate = serializers.FileField(required=False, allow_null=True, default=None)
+    business_license_number = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
+    business_license_document = serializers.FileField(required=False, allow_null=True, default=None)
+    
     bank_account_number = serializers.CharField(max_length=50, required=False, allow_blank=True, default='')
     bank_name = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
     bank_account_name = serializers.CharField(max_length=100, required=False, allow_blank=True, default='')
-    business_certificate = serializers.FileField(required=False, allow_null=True, default=None)
 
     def validate_business_certificate(self, f):
+        if f is None:
+            return f
+        # Reusing validator for both certificate and license for now
+        return _django_to_drf(validate_business_certificate_upload, f)
+
+    def validate_business_license_document(self, f):
         if f is None:
             return f
         return _django_to_drf(validate_business_certificate_upload, f)

@@ -60,6 +60,7 @@ class ListingSerializer(serializers.ModelSerializer):
     seller_verified = serializers.SerializerMethodField()
     owner_profile_image = serializers.SerializerMethodField()
     is_ghost_listing = serializers.SerializerMethodField()
+    is_liked = serializers.SerializerMethodField()
     ownerName = serializers.CharField(source='owner.username', read_only=True)
     categoryName = serializers.CharField(source='category.name', read_only=True)
     likesCount = serializers.IntegerField(source='likes.count', read_only=True)
@@ -80,7 +81,7 @@ class ListingSerializer(serializers.ModelSerializer):
             'category', 'category_name', 'categoryName', 'category_vertical', 'status', 'city', 'address', 
             'listing_type', 'condition', 'is_published', 'view_count', 'likes_count', 'likesCount',
             'media', 'seller_verified', 'sellerVerified', 'trust_verification', 'trustVerification',
-            'is_verified', 'isVerified',
+            'is_verified', 'isVerified', 'is_liked',
             'is_featured', 'isFeatured',
             'owner_profile_image', 'ownerProfileImage', 'is_ghost_listing', 'isGhostListing',
             'created_at', 'createdAt', 'updated_at', 'updatedAt',
@@ -142,6 +143,16 @@ class ListingSerializer(serializers.ModelSerializer):
         if obj.owner:
             return obj.owner.username
         return "Deleted Seller"
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_is_liked(self, obj):
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        # Efficiency: rely on prefetching if it's there
+        if hasattr(obj, '_is_liked'):
+            return obj._is_liked
+        return obj.likes.filter(user=request.user).exists()
 
     def _owner_trust_block(self, obj):
         """

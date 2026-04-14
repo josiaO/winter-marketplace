@@ -1,9 +1,7 @@
 'use client';
 
 import { ProductPageView } from '../../view-modules';
-import { use } from 'react';
-
-export default function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = use(params);
+export default function Page({ params }: { params: { id: string } }) {
+  const { id } = params;
   return <ProductPageView productId={id} />;
 }

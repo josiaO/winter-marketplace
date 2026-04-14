@@ -17,6 +17,7 @@ import {
   User,
   ArrowRight,
   ShieldCheck,
+  CheckCircle2,
 } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
@@ -246,6 +247,41 @@ export function SellerSettingsView() {
               </CardDescription>
             </CardHeader>
             <CardContent className="pt-6 space-y-6">
+               {/* Verification Status Banner */}
+               <div className="p-5 rounded-2xl bg-muted/30 border border-primary/10 flex flex-col sm:flex-row items-center justify-between gap-4">
+                   <div className="flex items-center gap-4">
+                       <div className={cn(
+                           "w-12 h-12 rounded-2xl flex items-center justify-center",
+                           user.seller_profile?.verification_status === 'verified' ? "bg-green-100 text-green-600" :
+                           user.seller_profile?.verification_status === 'under_review' ? "bg-blue-100 text-blue-600" :
+                           user.seller_profile?.verification_status === 'rejected' ? "bg-red-100 text-red-600" :
+                           "bg-amber-100 text-amber-600"
+                       )}>
+                           <ShieldCheck className="w-6 h-6" />
+                       </div>
+                       <div>
+                           <div className="flex items-center gap-2">
+                               <p className="font-bold text-lg leading-none capitalize">
+                                 {user.seller_profile?.verification_status?.replace('_', ' ') || 'Incomplete'}
+                               </p>
+                               <Badge variant="outline" className="text-[10px] uppercase tracking-tighter h-5">
+                                   Step 3: Identity
+                               </Badge>
+                           </div>
+                           <p className="text-sm text-muted-foreground mt-1 font-medium">
+                               {user.seller_profile?.verification_status === 'verified' ? 'Your store is fully verified and trusted.' : 'Verify your identity to unlock payouts and listing visibility.'}
+                           </p>
+                       </div>
+                   </div>
+                   <Button 
+                       className="w-full sm:w-auto rounded-xl font-bold transition-all shadow-sm"
+                       variant={user.seller_profile?.verification_status === 'verified' ? "secondary" : "default"}
+                       onClick={() => router.push(routes.sellerVerification())}
+                   >
+                       {user.seller_profile?.verification_status === 'verified' ? 'View ID Status' : 'Start Verification →'}
+                   </Button>
+               </div>
+
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                  <ImageUploadField 
                    label="Store Logo"
@@ -254,21 +290,6 @@ export function SellerSettingsView() {
                    onFileSelect={setLogoFile}
                    aspect="square"
                  />
-                 <div className="flex-1">
-                    <Label className="mb-3 block">Verification Status</Label>
-                    <div className="p-4 rounded-xl bg-muted/50 border flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <ShieldCheck className={cn("w-6 h-6", user.seller_profile?.verification_status === 'verified' ? "text-green-500" : "text-amber-500")} />
-                            <div>
-                                <p className="font-semibold capitalize">{user.seller_profile?.verification_status || 'Incomplete'}</p>
-                                <p className="text-xs text-muted-foreground">Identity Verification</p>
-                            </div>
-                        </div>
-                        <Button variant="outline" size="sm" onClick={() => router.push(routes.sellerVerification())}>
-                            View Details
-                        </Button>
-                    </div>
-                 </div>
                </div>
 
                <Separator />
@@ -381,7 +402,43 @@ export function SellerSettingsView() {
 
         {/* Right Column: Preferences */}
         <div className="space-y-6">
-          <Card className="border-0 shadow-md shadow-black/5">
+           {/* Tier 2: Business Upgrade */}
+           {user.seller_profile?.verification_status === 'verified' && !user.seller_profile?.is_business_verified && (
+             <Card className="border-0 shadow-lg bg-gradient-to-br from-indigo-600 to-indigo-800 text-white overflow-hidden relative">
+               <div className="absolute top-0 right-0 p-4 opacity-10">
+                 <ShieldCheck className="w-20 h-20" />
+               </div>
+               <CardHeader className="pb-2">
+                 <Badge className="w-fit bg-white/20 text-white border-white/30 text-[9px] uppercase font-black mb-2">
+                    Tier 2 Opportunity
+                 </Badge>
+                 <CardTitle className="text-lg font-bold">Verified Business</CardTitle>
+                 <CardDescription className="text-indigo-100/80 text-xs">
+                   Reach 100% trust and unlock unlimited daily payouts.
+                 </CardDescription>
+               </CardHeader>
+               <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Unlimited Listings (500+)</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs font-semibold">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Elite Merchant Badge</span>
+                    </div>
+                  </div>
+                  <Button 
+                    className="w-full bg-white text-indigo-700 hover:bg-white/90 font-bold rounded-xl shadow-lg shadow-black/20" 
+                    onClick={() => router.push(routes.sellerOnboardingVerifyBusiness())}
+                  >
+                    Upgrade Now →
+                  </Button>
+               </CardContent>
+             </Card>
+           )}
+
+           <Card className="border-0 shadow-md shadow-black/5">
             <CardHeader className="pb-4">
               <div className="flex items-center gap-2">
                 <Bell className="w-5 h-5 text-primary" />

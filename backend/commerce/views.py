@@ -96,6 +96,21 @@ class CartViewSet(viewsets.ModelViewSet):
             return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['post'])
+    def batch_add(self, request):
+        """Add multiple items to the cart in a single request."""
+        cart = cart_svc.get_or_create_cart(user=request.user)
+        items = request.data.get('items', [])
+        
+        if not isinstance(items, list) or not items:
+            return Response({'error': 'items (list) is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        try:
+            cart_svc.batch_add_to_cart(cart=cart, items=items)
+            return Response(CartSerializer(cart).data)
+        except ValueError as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
+
+    @action(detail=False, methods=['post'])
     def remove_item(self, request):
         cart = get_object_or_404(Cart, user=request.user)
         item_id = request.data.get('item_id')
@@ -258,6 +273,7 @@ class OrderViewSet(viewsets.ModelViewSet):
             'seller__profile',
             'seller__seller_profile',
             'engine_transaction',
+            'engine_transaction__dispute',
         )
 
     def create(self, request, *args, **kwargs):
@@ -789,8 +805,8 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['post'], url_path='request-withdrawal')
     def request_withdrawal(self, request):
         """
-        Record a seller withdrawal request against released escrow (available_for_withdrawal).
-        Payout is processed by operations / existing payout pipeline — not instant from this endpoint.
+        Record and automatically process a seller withdrawal request against released escrow.
+        Automates the previously manual payout approval flow.
         """
         user = request.user
         if not self._seller_portal_user(user):
@@ -842,17 +858,83 @@ class OrderViewSet(viewsets.ModelViewSet):
             )
 
         seller_note = str(request.data.get('seller_note', '') or '')[:500]
-        row = SellerWithdrawalRequest.objects.create(
-            seller=user,
-            amount=amt,
-            currency='TZS',
-            payout_method=pm,
-            seller_note=seller_note,
-        )
+        
+        with transaction.atomic():
+            row = SellerWithdrawalRequest.objects.create(
+                seller=user,
+                amount=amt,
+                currency='TZS',
+                payout_method=pm,
+                seller_note=seller_note,
+            )
+            
+            # Automated Payout Bridge
+            success = self._trigger_automated_payout(row, pm)
+            if success:
+                row.status = SellerWithdrawalRequest.Status.COMPLETED
+                row.admin_note = "Automated payout processed via Selcom Qwiksend."
+                row.save(update_fields=['status', 'admin_note', 'updated_at'])
+
         return Response(
             SellerWithdrawalRequestSerializer(row).data,
             status=status.HTTP_201_CREATED,
         )
+
+    def _trigger_automated_payout(self, withdrawal_request, pm) -> bool:
+        """
+        Internal bridge to call the escrow_engine payout service.
+        Iterates through released transactions to fulfill the total requested amount.
+        """
+        try:
+            # 1. Find released transactions belonging to seller
+            released_txns = EngTxn.objects.filter(
+                seller_user=withdrawal_request.seller,
+                status=_TS.RELEASED
+            ).exclude(
+                payouts__status='completed'
+            ).order_by('created_at')
+
+            if not released_txns.exists():
+                logger.warning(f"No released transactions found for seller {withdrawal_request.seller_id}")
+                return False
+
+            total_payout_count = 0
+            remaining_to_pay = withdrawal_request.amount
+            
+            for txn in released_txns:
+                if remaining_to_pay <= 0:
+                    break
+                    
+                # 2. Get or create payout row
+                payout, created = EngPayout.objects.get_or_create(
+                    transaction=txn,
+                    defaults={
+                        'seller': withdrawal_request.seller,
+                        'amount': txn.amount, # Placeholder, will be refined by service
+                        'currency': txn.currency,
+                        'payout_method': pm.provider_type or 'mpesa',
+                        'status': EngPayout.Status.PENDING
+                    }
+                )
+                
+                # 3. Trigger processing
+                try:
+                    process_seller_payout(
+                        payout,
+                        account_number=pm.account_number,
+                        account_name=pm.account_name,
+                        bank_code=pm.bank_code
+                    )
+                    if payout.status == EngPayout.Status.COMPLETED:
+                        total_payout_count += 1
+                        remaining_to_pay -= payout.amount
+                except Exception as e:
+                    logger.error(f"Automated payout failed for txn {txn.id}: {e}")
+            
+            return total_payout_count > 0
+        except Exception as e:
+            logger.exception(f"Automation bridge error: {e}")
+            return False
 
     @action(detail=False, methods=['get'], url_path='withdrawal-requests')
     def withdrawal_requests(self, request):

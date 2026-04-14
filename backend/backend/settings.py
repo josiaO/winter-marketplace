@@ -738,6 +738,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'commerce.tasks.reconciliation_healing_periodic',
         'schedule': schedule(run_every=300.0),
     },
+    'escrow-auto-resolve-disputes': {
+        'task': 'escrow_engine.tasks.auto_resolve_unresponsive_seller_disputes_periodic',
+        'schedule': crontab(minute='*/30'), # Every 30 minutes
+    },
 }
 
 # Django-parler configuration

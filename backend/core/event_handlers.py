@@ -11,6 +11,17 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
+def _get_notify():
+    from core.services.notifications import BaseNotificationService
+    return BaseNotificationService()
+
+def _get_order(order_id):
+    from commerce.models import Order
+    try:
+        return Order.objects.select_related('buyer', 'seller').get(id=order_id)
+    except Order.DoesNotExist:
+        return None
+
 
 def _maybe_run_order_reconciliation(payload: dict[str, Any]) -> None:
     oid = payload.get('order_id')
@@ -68,26 +79,62 @@ def handle_event(event_name: str, payload: dict) -> None:
 
 
 def handle_order_created(payload: dict[str, Any]) -> None:
-    _ = payload.get('order_id')
+    order = _get_order(payload.get('order_id'))
+    if not order or not order.seller: return
+    
+    _get_notify().push.send_push(
+        order.seller,
+        "New Order Received! / Oda Mpya!",
+        f"You have a new order for {order.items.first().listing.title[:30]}. Pay attention! / Una oda mpya. Tafadhali iandae.",
+        data={'type': 'order_detail', 'order_id': order.id}
+    )
 
 
 def handle_order_confirmed(payload: dict[str, Any]) -> None:
-    _ = payload.get('order_id')
+    order = _get_order(payload.get('order_id'))
+    if not order or not order.seller: return
+    
+    _get_notify().push.send_push(
+        order.seller,
+        "Payment Received! / Malipo Yamepokelewa!",
+        "Money is in escrow. Please ship the item now! / Malipo yapo salama. Tafadhali tuma bidhaa sasa!",
+        data={'type': 'order_detail', 'order_id': order.id}
+    )
 
 
 def handle_order_shipped(payload: dict[str, Any]) -> None:
-    _ = payload.get('order_id')
+    order = _get_order(payload.get('order_id'))
+    if not order or not order.buyer: return
+    
+    _get_notify().push.send_push(
+        order.buyer,
+        "Order Shipped! / Oda Imesafirishwa!",
+        "Your order is on the way. Check tracking in the app. / Oda yako ipo njiani. Fuatilia kwenye app.",
+        data={'type': 'order_detail', 'order_id': order.id}
+    )
 
 
 def handle_order_delivered(payload: dict[str, Any]) -> None:
-    _ = payload.get('order_id')
+    order = _get_order(payload.get('order_id'))
+    if not order or not order.buyer: return
+    
+    _get_notify().push.send_push(
+        order.buyer,
+        "Order Delivered / Oda Imefika",
+        "Your package is ready. Please confirm receipt to release funds. / Oda yako imefika. Tafadhali thibitisha kuipata.",
+        data={'type': 'order_detail', 'order_id': order.id}
+    )
 
 
 def handle_order_completed(payload: dict[str, Any]) -> None:
-    logger.debug(
-        'ORDER_COMPLETED side effects placeholder order_id=%s',
-        payload.get('order_id'),
-    )
+    order = _get_order(payload.get('order_id'))
+    if order and order.seller:
+        _get_notify().push.send_push(
+            order.seller,
+            "Funds Released! / Pesa Zimeachiwa!",
+            "Order completed. Funds are now available for withdrawal. / Oda imekamilika. Sasa unaweza kutoa pesa zako.",
+            data={'type': 'wallet'}
+        )
     _maybe_run_order_reconciliation(payload)
 
 
@@ -108,7 +155,15 @@ def handle_escrow_refund_applied(payload: dict[str, Any]) -> None:
 
 
 def handle_order_dispute_opened(payload: dict[str, Any]) -> None:
-    _ = payload.get('order_id')
+    order = _get_order(payload.get('order_id'))
+    if not order or not order.seller: return
+    
+    _get_notify().push.send_push(
+        order.seller,
+        "Dispute Opened / Mgogoro Umefunguliwa",
+        "A buyer opened a dispute for your order. Respond with evidence! / Kuna mgogoro wa oda yako. Tafadhali jibu sasa!",
+        data={'type': 'order_detail', 'order_id': order.id}
+    )
 
 
 def handle_order_dispute_resolved(payload: dict[str, Any]) -> None:

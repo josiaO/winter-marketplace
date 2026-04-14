@@ -72,54 +72,17 @@ export function OrdersPage() {
       }
       setBuyAgainOrderId(order.id);
       try {
-        let added = 0;
-        let lastMessage = '';
+        const items = order.items.map(item => ({
+          listing_id: item.listing.id,
+          quantity: item.quantity
+        }));
 
-        for (const item of order.items) {
-          const listing: any = item.listing;
-          const listingId = listing?.id;
-          if (!listingId) {
-            const browse = window.confirm(
-              'This product is no longer available. Browse similar items?',
-            );
-            if (browse) {
-              router.push(routes.home());
-            }
-            continue;
-          }
-
-          const latest = await api.listings.detail(String(listingId));
-          const currentStock =
-            typeof latest.stock_quantity === 'number' ? latest.stock_quantity : undefined;
-
-          if (currentStock !== undefined && currentStock < 1) {
-            const notify = window.confirm(
-              'This item is currently out of stock. Notify me when available?',
-            );
-            if (notify) {
-              toast.success('We will remember this item in your wishlist for later.');
-            }
-            continue;
-          }
-
-          const qty = Number(item.quantity || 1);
-          await api.commerce.cartAddItem({ listing_id: listingId, quantity: qty });
-          added += 1;
-
-          const previousPrice = Number(item.price_at_time ?? latest.price ?? 0);
-          const currentPrice = Number(latest.price ?? 0);
-          if (currentPrice !== previousPrice) {
-            lastMessage = `Added to cart at current price: ${formatTZS(currentPrice)} (Price was ${formatTZS(previousPrice)} when you last bought)`;
-          } else {
-            lastMessage = `Added to cart at current price: ${formatTZS(currentPrice)}`;
-          }
-        }
-
-        if (added > 0) {
-          toast.success(lastMessage || 'Added to cart');
-        }
-      } catch {
-        toast.error('Could not buy this item again right now.');
+        await api.commerce.cartBatchAdd({ items });
+        
+        toast.success('Items added to basket!');
+        router.push(routes.checkout());
+      } catch (err: any) {
+        toast.error(err.message || 'Could not re-add items to basket.');
       } finally {
         setBuyAgainOrderId(null);
       }
