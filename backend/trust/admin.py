@@ -21,6 +21,7 @@ class UserVerificationAdmin(admin.ModelAdmin):
         'user', 'id_status', 'tin_status', 'business_license_status', 
         'is_identity_verified', 'verification_date'
     )
+    list_select_related = ('user',)
     list_filter = (
         'id_status', 'tin_status', 'business_license_status',
         'is_identity_verified', 'verification_date'
@@ -72,6 +73,7 @@ class ListingVerificationAdmin(admin.ModelAdmin):
         'listing_id', 'content_type', 'is_verified',
         'verified_by', 'created_at'
     )
+    list_select_related = ('verified_by',)
     list_filter = ('is_verified', 'created_at')
     search_fields = ('listing_id', 'notes', 'verified_by__username')
     readonly_fields = ('created_at', 'updated_at')
@@ -100,6 +102,7 @@ class ReputationScoreAdmin(admin.ModelAdmin):
     list_display = (
         'user', 'score', 'total_reviews', 'created_at', 'updated_at'
     )
+    list_select_related = ('user',)
     list_filter = ('score', 'created_at')
     search_fields = ('user__username', 'user__email')
     readonly_fields = ('created_at', 'updated_at')
@@ -127,6 +130,7 @@ class PriceAnomalyAdmin(admin.ModelAdmin):
         'listing', 'anomaly_type', 'score',
         'deviation_percentage', 'is_reviewed', 'created_at'
     )
+    list_select_related = ('listing', 'reviewed_by')
     list_filter = (
         'anomaly_type', 'is_reviewed', 'score', 'created_at'
     )
@@ -199,6 +203,7 @@ class ReviewMediaInline(admin.TabularInline):
 @admin.register(Review)
 class ReviewAdmin(admin.ModelAdmin):
     list_display = ('id', 'order', 'buyer', 'seller', 'rating', 'is_approved', 'created_at')
+    list_select_related = ('order', 'buyer', 'seller')
     list_filter = ('rating', 'is_approved', 'is_flagged', 'is_hidden')
     search_fields = ('buyer__username', 'seller__username', 'comment')
     inlines = [ReviewMediaInline]
@@ -207,6 +212,7 @@ class ReviewAdmin(admin.ModelAdmin):
 @admin.register(Report)
 class ReportAdmin(admin.ModelAdmin):
     list_display = ('id', 'reporter', 'report_type', 'reason', 'status', 'created_at')
+    list_select_related = ('reporter',)
     list_filter = ('status', 'report_type', 'reason')
     search_fields = ('reporter__username', 'description')
 
@@ -214,6 +220,7 @@ class ReportAdmin(admin.ModelAdmin):
 @admin.register(TrustScore)
 class TrustScoreAdmin(admin.ModelAdmin):
     list_display = ('user', 'score', 'id_verified', 'tin_verified', 'license_verified', 'last_calculated_at')
+    list_select_related = ('user',)
     list_filter = ('score', 'id_verified', 'tin_verified', 'license_verified')
     search_fields = ('user__username',)
     readonly_fields = ('last_calculated_at',)
@@ -222,5 +229,6 @@ class TrustScoreAdmin(admin.ModelAdmin):
 @admin.register(ModerationAction)
 class ModerationActionAdmin(admin.ModelAdmin):
     list_display = ('target_user', 'action_type', 'target_type', 'moderator', 'is_active', 'created_at')
+    list_select_related = ('target_user', 'moderator')
     list_filter = ('action_type', 'target_type', 'is_active')
     search_fields = ('target_user__username', 'reason')

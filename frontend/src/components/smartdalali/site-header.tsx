@@ -21,6 +21,7 @@ import {
   MessageSquare,
   Bell,
   Shield,
+  ArrowLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -144,6 +145,18 @@ export function SiteHeader() {
               >
                 <Menu className="w-5 h-5" />
               </Button>
+
+              {pathname !== '/' && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="hidden sm:inline-flex"
+                  onClick={() => router.back()}
+                  aria-label="Go back"
+                >
+                  <ArrowLeft className="w-5 h-5" />
+                </Button>
+              )}
 
               {/* Logo */}
               <button

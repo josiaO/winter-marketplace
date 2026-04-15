@@ -35,7 +35,11 @@ async def test_websocket(token, username):
     print(f"Connecting to: {ws_url} with subprotocols={subprotocols[0]}, <jwt b64url>")
 
     try:
-        async with websockets.connect(ws_url, subprotocols=subprotocols) as websocket:
+        # Standard connect call
+        async with websockets.connect(
+            ws_url, 
+            subprotocols=subprotocols
+        ) as websocket:
             print("Successfully connected!")
             
             try:

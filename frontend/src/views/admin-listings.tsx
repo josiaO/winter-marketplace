@@ -17,6 +17,13 @@ import {
   ChevronRight,
   ShieldCheck,
   Sparkles,
+  Edit,
+  Edit3,
+  Trash2,
+  AlertTriangle,
+  Plus,
+  Minus,
+  CheckCircle,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -44,6 +51,25 @@ import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, getRelativeTime } from '@/lib/helpers';
 import { EmptyState } from '@/components/smartdalali/empty-state';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import type { Listing, PaginatedResponse } from '@/types/api';
 
 const PAGE_SIZE = 20;
@@ -83,6 +109,17 @@ export function AdminListingsPage() {
   const [page, setPage] = useState(1);
   const [togglingId, setTogglingId] = useState<number | null>(null);
   const [togglingAction, setTogglingAction] = useState<string | null>(null);
+
+  // Deletion state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Stock update state
+  const [isStockDialogOpen, setIsStockDialogOpen] = useState(false);
+  const [listingToUpdateStock, setListingToUpdateStock] = useState<Listing | null>(null);
+  const [newStock, setNewStock] = useState(0);
+  const [isUpdatingStock, setIsUpdatingStock] = useState(false);
 
   // ── Data fetching ──────────────────────────────────────────────────────
   const fetchListings = useCallback(async () => {
@@ -136,10 +173,50 @@ export function AdminListingsPage() {
       toast.success('Listing featured status updated.');
       fetchListings();
     } catch {
-      toast.error('Failed to update listing featured status.');
+      toast.error('Failed to update listing status');
     } finally {
       setTogglingId(null);
       setTogglingAction(null);
+    }
+  };
+
+  const handleUpdateStock = async () => {
+    if (!listingToUpdateStock) return;
+    setIsUpdatingStock(true);
+    try {
+      await api.listings.update(listingToUpdateStock.id, {
+        stock_quantity: newStock,
+        track_inventory: true,
+      });
+      toast.success('Stock quantity updated successfully.');
+      setIsStockDialogOpen(false);
+      fetchListings();
+    } catch {
+      toast.error('Failed to update stock quantity.');
+    } finally {
+      setIsUpdatingStock(false);
+    }
+  };
+
+  const openStockDialog = (listing: Listing) => {
+    setListingToUpdateStock(listing);
+    setNewStock(listing.stock_quantity || 0);
+    setIsStockDialogOpen(true);
+  };
+
+  const handleDeleteListing = async () => {
+    if (!listingToDelete) return;
+    setIsDeleting(true);
+    try {
+      await api.listings.delete(String(listingToDelete.id));
+      toast.success('Listing deleted successfully');
+      fetchListings();
+      setIsDeleteDialogOpen(false);
+    } catch {
+      toast.error('Failed to delete listing');
+    } finally {
+      setIsDeleting(false);
+      setListingToDelete(null);
     }
   };
 
@@ -157,14 +234,24 @@ export function AdminListingsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
         >
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-              <Package className="w-7 h-7 text-emerald-600" />
-              Listings Management
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Review, verify, and moderate marketplace listings
-            </p>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-sm bg-white shrink-0"
+              onClick={() => router.back()}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
+                <Package className="w-7 h-7 text-emerald-600" />
+                Listings Management
+              </h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                Review, verify, and moderate marketplace listings
+              </p>
+            </div>
           </div>
           <Button
             variant="outline"
@@ -228,6 +315,7 @@ export function AdminListingsPage() {
                               <TableHead>Seller</TableHead>
                               <TableHead>Category</TableHead>
                               <TableHead>Price</TableHead>
+                              <TableHead>Inventory</TableHead>
                               <TableHead>Status</TableHead>
                               <TableHead>Verified</TableHead>
                               <TableHead>Featured</TableHead>
@@ -270,6 +358,28 @@ export function AdminListingsPage() {
                                   </TableCell>
                                   <TableCell className="text-sm font-medium">
                                     {formatTZS(listing.price)}
+                                  </TableCell>
+                                  <TableCell>
+                                    {listing.track_inventory ? (
+                                      <div
+                                        className="flex items-center gap-2 cursor-pointer group/stock"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          openStockDialog(listing);
+                                        }}
+                                      >
+                                        <span className={`text-xs font-bold px-2 py-0.5 rounded-md ${
+                                          (listing.stock_quantity || 0) <= (listing.low_stock_threshold || 5)
+                                            ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
+                                            : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400'
+                                        }`}>
+                                          {listing.stock_quantity ?? 0} in stock
+                                        </span>
+                                        <Edit3 className="w-3 h-3 opacity-0 group-hover/stock:opacity-100 transition-opacity" />
+                                      </div>
+                                    ) : (
+                                      <span className="text-xs text-muted-foreground italic">Unlimited</span>
+                                    )}
                                   </TableCell>
                                   <TableCell>
                                     <Badge
@@ -335,9 +445,26 @@ export function AdminListingsPage() {
                                           {isBusy && togglingAction === 'featured' ? (
                                             <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                           ) : (
-                                            <Star className="w-4 h-4 mr-2" />
+                                            <Sparkles className="w-4 h-4 mr-2" />
                                           )}
                                           {listing.is_featured ? 'Unfeature' : 'Feature'}
+                                        </DropdownMenuItem>
+                                        <DropdownMenuSeparator />
+                                        <DropdownMenuItem
+                                          onClick={() => router.push(routes.sellerListingEdit(String(listing.id)))}
+                                        >
+                                          <Edit className="w-4 h-4 mr-2" />
+                                          Edit Listing
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem
+                                          className="text-destructive focus:text-destructive"
+                                          onClick={() => {
+                                            setListingToDelete(listing);
+                                            setIsDeleteDialogOpen(true);
+                                          }}
+                                        >
+                                          <Trash2 className="w-4 h-4 mr-2" />
+                                          Delete Listing
                                         </DropdownMenuItem>
                                       </DropdownMenuContent>
                                     </DropdownMenu>
@@ -395,8 +522,25 @@ export function AdminListingsPage() {
                                       onClick={() => handleToggleFeatured(listing.id)}
                                       disabled={togglingId === listing.id && togglingAction === 'featured'}
                                     >
-                                      <Star className="w-4 h-4 mr-2" />
+                                      <Sparkles className="w-4 h-4 mr-2" />
                                       {listing.is_featured ? 'Unfeature' : 'Feature'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem
+                                      onClick={() => router.push(routes.sellerListingEdit(String(listing.id)))}
+                                    >
+                                      <Edit className="w-4 h-4 mr-2" />
+                                      Edit Listing
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={() => {
+                                        setListingToDelete(listing);
+                                        setIsDeleteDialogOpen(true);
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete Listing
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -462,6 +606,92 @@ export function AdminListingsPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="w-5 h-5" />
+                Delete Listing?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{listingToDelete?.title}</strong>? This action cannot be undone and will remove the product from the marketplace.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteListing();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Listing"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Quick Stock Update Dialog */}
+        <Dialog open={isStockDialogOpen} onOpenChange={setIsStockDialogOpen}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>Update Stock</DialogTitle>
+              <DialogDescription>
+                Quickly adjust available quantity for this product.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6 flex flex-col items-center justify-center gap-4">
+              <div className="text-center">
+                <p className="text-sm font-medium text-muted-foreground truncate max-w-[300px] mb-4">
+                  {listingToUpdateStock?.title}
+                </p>
+                <div className="flex items-center gap-6">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-12 w-12 rounded-full"
+                    onClick={() => setNewStock(prev => Math.max(0, prev - 1))}
+                    disabled={isUpdatingStock}
+                  >
+                    <Minus className="w-6 h-6" />
+                  </Button>
+                  <div className="text-center w-24">
+                    <input
+                      type="number"
+                      value={newStock}
+                      onChange={(e) => setNewStock(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="text-4xl font-bold bg-transparent text-center w-full focus:outline-none"
+                      disabled={isUpdatingStock}
+                    />
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Available Units</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-12 w-12 rounded-full"
+                    onClick={() => setNewStock(prev => prev + 1)}
+                    disabled={isUpdatingStock}
+                  >
+                    <Plus className="w-6 h-6" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsStockDialogOpen(false)} disabled={isUpdatingStock}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateStock} disabled={isUpdatingStock} className="gap-2">
+                {isUpdatingStock ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

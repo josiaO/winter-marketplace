@@ -24,6 +24,7 @@ import {
   XCircle,
   Loader2,
   CheckCircle2,
+  Play,
 } from 'lucide-react';
 import { AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -50,7 +51,7 @@ import { Label } from '@/components/ui/label';
 import { useAuthStore, useCartStore } from '@/store';
 import { fetchCartForStore } from '@/lib/django-cart-adapter';
 import { api } from '@/lib/api-client';
-import { formatTZS, getInitials, getRelativeTime, formatDate, normalizeMediaUrl } from '@/lib/helpers';
+import { formatTZS, getInitials, getRelativeTime, formatDate, normalizeMediaUrl, normalizeListing } from '@/lib/helpers';
 import { toast } from 'sonner';
 import { isListingInLocalWishlist, toggleLocalWishlist } from '@/lib/local-wishlist';
 import {
@@ -163,12 +164,13 @@ export function ProductPage({ productId }: { productId: string }) {
           api.trust.reviews({ listing: productId }),
         ]);
 
-        setListing(listingData);
+        const normalizedListing = normalizeListing(listingData as unknown as Record<string, unknown>);
+        setListing(normalizedListing);
         setReviews(reviewsData.results);
         setIsLoadingReviews(false);
 
         // Set primary image
-        const primaryIdx = listingData.images?.findIndex((img) => img.is_primary);
+        const primaryIdx = normalizedListing.images?.findIndex((img) => img.isPrimary || img.is_primary);
         if (primaryIdx >= 0) setSelectedImage(primaryIdx);
 
         // Optional eligibility check (don't block main UI for this)
@@ -488,14 +490,23 @@ export function ProductPage({ productId }: { productId: string }) {
                 className="absolute inset-0"
               >
                 {primaryImage?.image ? (
-                  <Image
-                    src={normalizeMediaUrl(primaryImage.image) || primaryImage.image}
-                    alt={listing.title}
-                    fill
-                    className="object-cover"
-                    sizes="(max-width: 1024px) 100vw, 50vw"
-                    priority
-                  />
+                  ((primaryImage as any).media_type === 'video' || primaryImage.image?.match(/\.(mp4|webm)$/i)) ? (
+                    <video
+                      src={normalizeMediaUrl(primaryImage.image) || primaryImage.image}
+                      className="w-full h-full object-cover bg-black"
+                      controls
+                      playsInline
+                    />
+                  ) : (
+                    <Image
+                      src={normalizeMediaUrl(primaryImage.image) || primaryImage.image}
+                      alt={listing.title}
+                      fill
+                      className="object-cover"
+                      sizes="(max-width: 1024px) 100vw, 50vw"
+                      priority
+                    />
+                  )
                 ) : (
                   <div className="w-full h-full flex items-center justify-center">
                     <Package className="w-16 h-16 text-muted-foreground/30" />
@@ -536,13 +547,19 @@ export function ProductPage({ productId }: { productId: string }) {
                       : 'border-transparent hover:border-muted-foreground/30'
                   }`}
                 >
-                  <Image
-                    src={normalizeMediaUrl(img.image) || img.image}
-                    alt={`${listing.title} ${i + 1}`}
-                    width={80}
-                    height={80}
-                    className="object-cover w-full h-full"
-                  />
+                  {((img as any).media_type === 'video' || img.image?.match(/\.(mp4|webm)$/i)) ? (
+                    <div className="relative w-full h-full bg-black/90 flex items-center justify-center text-white/70 hover:text-white transition-colors">
+                      <Play className="w-6 h-6 fill-current" />
+                    </div>
+                  ) : (
+                    <Image
+                      src={normalizeMediaUrl(img.image) || img.image}
+                      alt={`${listing.title} ${i + 1}`}
+                      width={80}
+                      height={80}
+                      className="object-cover w-full h-full"
+                    />
+                  )}
                 </button>
               ))}
             </div>
@@ -590,7 +607,6 @@ export function ProductPage({ productId }: { productId: string }) {
               <span className="text-2xl sm:text-3xl font-bold text-emerald-600 dark:text-emerald-400">
                 {formatTZS(listing.price)}
               </span>
-              <PriceFairnessTag fairness={listing.price_fairness} />
             </div>
             {listing.delivery_is_free === false &&
             listing.delivery_fee != null &&

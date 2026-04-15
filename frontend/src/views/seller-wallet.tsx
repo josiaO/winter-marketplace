@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, ArrowUpRight } from 'lucide-react';
+import { Wallet, ArrowUpRight, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -41,12 +41,26 @@ export function SellerWalletPage() {
 
   return (
     <div className="space-y-6 max-w-lg mx-auto">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Wallet className="w-7 h-7 text-primary" />
-          Wallet
-        </h1>
-        <p className="text-muted-foreground mt-1">Money that is ready for you, and money still in escrow.</p>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex items-center gap-4"
+      >
+        <Button
+          variant="outline"
+          size="icon"
+          className="rounded-full shadow-sm bg-white shrink-0"
+          onClick={() => router.push(routes.sellerDashboard())}
+        >
+          <ChevronLeft className="w-5 h-5" />
+        </Button>
+        <div>
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Wallet className="w-7 h-7 text-primary" />
+            Wallet
+          </h1>
+          <p className="text-muted-foreground mt-1">Money that is ready for you, and money still in escrow.</p>
+        </div>
       </motion.div>
 
       <Card className="border-0 shadow-lg">

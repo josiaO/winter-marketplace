@@ -3,7 +3,7 @@
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { routes } from '@/lib/routes';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Bell,
@@ -12,6 +12,7 @@ import {
   ClipboardList,
   LayoutDashboard,
   Lightbulb,
+  Lock,
   Package,
   PlusCircle,
   Settings,
@@ -39,7 +40,7 @@ import {
   orderTotalAmount,
   commerceOrderItemTitle,
 } from '@/lib/helpers';
-import type { CommerceSellerStats, Order, PaginatedResponse, SellerStats, Notification } from '@/types/api';
+import type { CommerceSellerStats, Order, PaginatedResponse, SellerStats, Notification, Listing } from '@/types/api';
 
 type OnboardingProgressState = {
   step_registration?: boolean;
@@ -49,6 +50,12 @@ type OnboardingProgressState = {
   step_payout_added?: boolean;
   step_id_submitted?: boolean;
   step_business_upgraded?: boolean;
+  completion_percentage?: number;
+  verification_status?: string;
+  store_is_active?: boolean;
+  rejection_reason?: string | null;
+  message_en?: string;
+  message_sw?: string;
 };
 
 type ActionOrder = {
@@ -77,39 +84,79 @@ export function SellerDashboardPage() {
   const [insights, setInsights] = useState<SellerStats | null>(null);
   const [progress, setProgress] = useState<OnboardingProgressState | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [listings, setListings] = useState<Listing[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isProgressLoading, setIsProgressLoading] = useState(true);
 
-  useEffect(() => {
+  // ─── Refresh progress (called on mount and when returning to this page) ──────
+  const refreshProgress = useCallback(async () => {
     if (!isAuthenticated || !user?.is_seller) return;
+    try {
+      setIsProgressLoading(true);
+      const prog = await api.sellers.onboardingProgress();
+      setProgress(prog as OnboardingProgressState);
+    } catch {
+      // silent – keep existing progress
+    } finally {
+      setIsProgressLoading(false);
+    }
+  }, [isAuthenticated, user?.is_seller]);
+
+  useEffect(() => {
+    // We only wait for authentication. If we have a user object (even partial/persisted), 
+    // we start fetching. We handle is_seller internally in queries.
+    if (!isAuthenticated) return;
 
     async function loadData() {
+      // Don't restart loading if we already have stats (unless we want to force refresh)
+      if (commerceStats && insights && progress) {
+        setIsLoading(false);
+        setIsProgressLoading(false);
+        return;
+      }
+
       try {
-        const [cStats, ins, prog, ordRes, notifRes] = await Promise.all([
-          api.commerce.sellerStats() as Promise<CommerceSellerStats>,
-          api.insights.sellerStats() as Promise<SellerStats>,
-          api.sellers.onboardingProgress(),
-          api.commerce.orders({ role: 'seller' }),
-          api.communications.notifications({ limit: 15 }).catch(() => ({ results: [] as Notification[] })),
+        const [cStats, ins, prog, ordRes, notifRes, listRes] = await Promise.all([
+          api.commerce.sellerStats().catch(() => null),
+          api.insights.sellerStats().catch(() => null),
+          api.sellers.onboardingProgress().catch(() => null),
+          api.commerce.orders({ role: 'seller' }).catch(() => ({ results: [] })),
+          api.communications.notifications({ limit: 15 }).catch(() => ({ results: [] })),
+          api.listings.sellerListings({ limit: 100, status: 'active' }).catch(() => ({ results: [] })),
         ]);
-        setCommerceStats(cStats);
-        setInsights(ins);
-        setProgress(prog as OnboardingProgressState);
+        
+        if (cStats) setCommerceStats(cStats as CommerceSellerStats);
+        if (ins) setInsights(ins as SellerStats);
+        if (prog) setProgress(prog as OnboardingProgressState);
+        
         const items =
           (ordRes as PaginatedResponse<Order>).results ??
           (Array.isArray(ordRes) ? ordRes : []);
         setOrders(items as Order[]);
         setNotifications((notifRes as PaginatedResponse<Notification>).results ?? []);
-      } catch {
-        toast.error('Failed to load dashboard data.');
+        setListings((listRes as PaginatedResponse<Listing>).results ?? []);
+      } catch (err) {
+        console.error('Dashboard load error:', err);
       } finally {
         setIsLoading(false);
         setIsProgressLoading(false);
       }
     }
     loadData();
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user?.id]); // Only re-run if auth changes or user ID changes (avoids re-fetch on profile sync metadata updates)
+
+  // ─── Re-fetch progress when user returns to this tab/page ────────────────────
+  // This ensures Step 3 unlocks immediately after adding a listing without reload
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        void refreshProgress();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [refreshProgress]);
 
   if (!isAuthenticated || !user) return null;
 
@@ -117,20 +164,22 @@ export function SellerDashboardPage() {
     ? [user.first_name, user.last_name].filter(Boolean).join(' ')
     : user.username;
 
-  const isOnboardingIncomplete = isProgressLoading
-    ? true
-    : Boolean(
-        progress &&
-          (
-            !progress.step_store_setup ||
-            !progress.step_first_product ||
-            !progress.step_id_approved ||
-            !progress.step_payout_added
-          ),
-      );
+  // All 4 steps must be done to hide the onboarding section
+  const allStepsDone = Boolean(
+    progress &&
+    progress.step_store_setup &&
+    progress.step_first_product &&
+    progress.step_id_approved &&
+    progress.step_payout_added
+  );
+
+  // Show the onboarding missions card whenever steps are NOT all done
+  // (show during loading too so skeleton renders)
+  const isOnboardingIncomplete = isProgressLoading ? false : !allStepsDone;
       
+  // Business upgrade card shown ONLY after all 4 base steps are done
   const showBusinessUpgrade = Boolean(
-    progress?.step_id_approved && !progress?.step_business_upgraded
+    allStepsDone && !progress?.step_business_upgraded
   );
 
   const autoDays = commerceStats?.policy?.auto_confirm_receipt_days ?? 7;
@@ -209,6 +258,10 @@ export function SellerDashboardPage() {
       .slice(0, 10);
   }, [notifications, orders]);
 
+  const lowStockListings = useMemo(() => {
+    return listings.filter(l => (l.stock_quantity ?? 0) <= 5);
+  }, [listings]);
+
   const revenueChart = insights?.revenue_chart ?? [];
   const maxRevenue = revenueChart.length ? Math.max(...revenueChart.map((m) => m.revenue), 1) : 1;
   const formatChartDate = (dateStr: string) => {
@@ -258,12 +311,17 @@ export function SellerDashboardPage() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    {/* ── Step 1: Store Basics ──────────────────────── */}
                     <div
-                      className={`group p-6 rounded-3xl border-2 transition-all ${progress?.step_store_setup ? 'border-emerald-200 bg-emerald-50/50' : 'border-indigo-100 bg-white hover:border-primary/30'}`}
+                      className={`relative group p-6 rounded-3xl border-2 transition-all ${
+                        progress?.step_store_setup
+                          ? 'border-emerald-200 bg-emerald-50/50'
+                          : 'border-indigo-100 bg-white hover:border-primary/30'
+                      }`}
                     >
                       <div className="flex justify-between items-start mb-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                            <Store className={`w-5 h-5 ${progress?.step_store_setup ? 'text-emerald-600' : 'text-primary'}`} />
+                          <Store className={`w-5 h-5 ${progress?.step_store_setup ? 'text-emerald-600' : 'text-primary'}`} />
                         </div>
                         {progress?.step_store_setup ? (
                           <CheckCircle2 className="w-6 h-6 text-emerald-500" />
@@ -284,12 +342,28 @@ export function SellerDashboardPage() {
                       )}
                     </div>
 
+                    {/* ── Step 2: Add Product ──────────────────────── */}
                     <div
-                      className={`group p-6 rounded-3xl border-2 transition-all ${progress?.step_first_product ? 'border-emerald-200 bg-emerald-50/50' : 'border-indigo-100 bg-white hover:border-primary/30'}`}
+                      className={`relative group p-6 rounded-3xl border-2 transition-all ${
+                        progress?.step_first_product
+                          ? 'border-emerald-200 bg-emerald-50/50'
+                          : progress?.step_store_setup
+                          ? 'border-indigo-100 bg-white hover:border-primary/30'
+                          : 'border-gray-100 bg-gray-50/50 opacity-70'
+                      }`}
                     >
+                      {/* Lock overlay when Step 1 not done */}
+                      {!progress?.step_store_setup && (
+                        <div className="absolute inset-0 rounded-3xl flex items-center justify-center bg-white/60 backdrop-blur-[1px] z-10">
+                          <div className="flex flex-col items-center gap-1 text-gray-400">
+                            <Lock className="w-5 h-5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Complete Step 1</span>
+                          </div>
+                        </div>
+                      )}
                       <div className="flex justify-between items-start mb-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                            <Package className={`w-5 h-5 ${progress?.step_first_product ? 'text-emerald-600' : 'text-primary'}`} />
+                          <Package className={`w-5 h-5 ${progress?.step_first_product ? 'text-emerald-600' : 'text-primary'}`} />
                         </div>
                         {progress?.step_first_product ? (
                           <CheckCircle2 className="w-6 h-6 text-emerald-500" />
@@ -299,7 +373,7 @@ export function SellerDashboardPage() {
                       </div>
                       <h4 className="font-bold text-gray-900 mb-1">2. Add Product</h4>
                       <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">
-                        Your listings will show as <span className="text-amber-600 font-bold italic">Unverified</span> until you complete Step 3.
+                        Your listing saves as <span className="text-amber-600 font-bold italic">draft</span> until verified.
                       </p>
                       {!progress?.step_first_product && (
                         <Button
@@ -313,48 +387,84 @@ export function SellerDashboardPage() {
                       )}
                     </div>
 
+                    {/* ── Step 3: Verify Identity ────────────────────── */}
                     <div
-                      className={`group p-6 rounded-3xl border-2 transition-all ${progress?.step_id_approved ? 'border-emerald-200 bg-emerald-50/50' : 'border-indigo-100 bg-white hover:border-primary/30'}`}
+                      className={`relative group p-6 rounded-3xl border-2 transition-all ${
+                        progress?.step_id_approved
+                          ? 'border-emerald-200 bg-emerald-50/50'
+                          : progress?.step_first_product
+                          ? 'border-indigo-100 bg-white hover:border-primary/30'
+                          : 'border-gray-100 bg-gray-50/50 opacity-70'
+                      }`}
                     >
-                        <div className="flex justify-between items-start mb-3">
-                            <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                                <User className={`w-5 h-5 ${progress?.step_id_approved ? 'text-emerald-600' : 'text-primary'}`} />
-                            </div>
-                            {progress?.step_id_approved ? (
-                            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                            ) : (
-                            <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
-                            )}
+                      {/* Lock overlay when Step 2 not done */}
+                      {!progress?.step_first_product && (
+                        <div className="absolute inset-0 rounded-3xl flex items-center justify-center bg-white/60 backdrop-blur-[1px] z-10">
+                          <div className="flex flex-col items-center gap-1 text-gray-400">
+                            <Lock className="w-5 h-5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Complete Step 2</span>
+                          </div>
                         </div>
+                      )}
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                          <User className={`w-5 h-5 ${progress?.step_id_approved ? 'text-emerald-600' : 'text-primary'}`} />
+                        </div>
+                        {progress?.step_id_approved ? (
+                          <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
+                        )}
+                      </div>
                       <h4 className="font-bold text-gray-900 mb-1">3. Verify Identity</h4>
                       <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">Required for trust and payout safety.</p>
                       {!progress?.step_id_approved ? (
                         <Button
                           size="sm"
                           disabled={!progress?.step_first_product}
-                          className={`w-full rounded-xl font-bold transition-all ${progress?.step_id_submitted ? 'bg-amber-100 text-amber-700 hover:bg-amber-200' : 'group-hover:shadow-lg shadow-primary/20'}`}
+                          className={`w-full rounded-xl font-bold transition-all ${
+                            progress?.step_id_submitted
+                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                              : 'group-hover:shadow-lg shadow-primary/20'
+                          }`}
                           onClick={() => router.push(routes.sellerOnboardingVerifyIdentity())}
                         >
-                          {progress?.step_id_submitted ? 'Under Review' : 'Verify Identity'}
+                          {progress?.step_id_submitted ? 'Under Review ⏳' : 'Verify Identity'}
                         </Button>
                       ) : (
-                          <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest text-center mt-2">Verified Seller</p>
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest text-center mt-2">Verified Seller ✅</p>
                       )}
                     </div>
 
+                    {/* ── Step 4: Payout Method ─────────────────────── */}
                     <div
-                      className={`group p-6 rounded-3xl border-2 transition-all ${progress?.step_payout_added ? 'border-emerald-200 bg-emerald-50/50' : 'border-indigo-100 bg-white hover:border-primary/30'}`}
+                      className={`relative group p-6 rounded-3xl border-2 transition-all ${
+                        progress?.step_payout_added
+                          ? 'border-emerald-200 bg-emerald-50/50'
+                          : progress?.step_id_approved
+                          ? 'border-indigo-100 bg-white hover:border-primary/30'
+                          : 'border-gray-100 bg-gray-50/50 opacity-70'
+                      }`}
                     >
-                        <div className="flex justify-between items-start mb-3">
-                            <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                                <Wallet className={`w-5 h-5 ${progress?.step_payout_added ? 'text-emerald-600' : 'text-primary'}`} />
-                            </div>
-                            {progress?.step_payout_added ? (
-                            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                            ) : (
-                            <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
-                            )}
+                      {/* Lock overlay when Step 3 not done */}
+                      {!progress?.step_id_approved && (
+                        <div className="absolute inset-0 rounded-3xl flex items-center justify-center bg-white/60 backdrop-blur-[1px] z-10">
+                          <div className="flex flex-col items-center gap-1 text-gray-400">
+                            <Lock className="w-5 h-5" />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">Complete Step 3</span>
+                          </div>
                         </div>
+                      )}
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
+                          <Wallet className={`w-5 h-5 ${progress?.step_payout_added ? 'text-emerald-600' : 'text-primary'}`} />
+                        </div>
+                        {progress?.step_payout_added ? (
+                          <CheckCircle2 className="w-6 h-6 text-emerald-500" />
+                        ) : (
+                          <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
+                        )}
+                      </div>
                       <h4 className="font-bold text-gray-900 mb-1">4. Payout Method</h4>
                       <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">Set up your bank or mobile wallet.</p>
                       {!progress?.step_payout_added && (
@@ -407,7 +517,7 @@ export function SellerDashboardPage() {
                             </div>
                             <Button 
                                 size="lg" 
-                                onClick={() => router.push(routes.sellerOnboardingVerifyBusiness())}
+                                onClick={() => router.push(routes.sellerVerification())}
                                 className="bg-white text-primary hover:bg-slate-50 h-16 px-8 rounded-2xl font-black text-xl shadow-2xl shadow-black/20 group/btn transition-all hover:scale-105"
                             >
                                 Start Upgrade
@@ -582,7 +692,7 @@ export function SellerDashboardPage() {
       </motion.div>
 
       {/* Motivation Banner - Dynamic Nudge */}
-      {progress && progress.completion_percentage < 100 && (
+      {progress && (progress.completion_percentage ?? 0) < 100 && (
          <motion.div 
            initial={{ opacity: 0, scale: 0.98 }}
            animate={{ opacity: 1, scale: 1 }}
@@ -595,7 +705,7 @@ export function SellerDashboardPage() {
                <div>
                   <p className="font-bold text-sm">Boost your buyer trust level</p>
                   <p className="text-xs text-muted-foreground font-medium mt-0.5">
-                    {progress.completion_percentage < 50 
+                    {(progress.completion_percentage ?? 0) < 50 
                       ? `Reach 50% trust to remove the 'Unverified' badge and build buyer confidence.`
                       : "Upgrade to a Business Seller in settings to reach 100% and unlock unlimited payouts."
                     }
@@ -615,6 +725,45 @@ export function SellerDashboardPage() {
             </div>
          </motion.div>
       )}
+
+      {/* Low Stock Alerts */}
+      <AnimatePresence>
+        {lowStockListings.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20 rounded-2xl p-4 mb-2">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400" />
+                  </div>
+                  <div>
+                    <p className="font-bold text-sm text-red-900 dark:text-red-200">Inventory Alert</p>
+                    <p className="text-xs text-red-700 dark:text-red-300 font-medium">
+                      {lowStockListings.length === 1 
+                        ? `"${lowStockListings[0].title}" is running low (${lowStockListings[0].stock_quantity} remaining).`
+                        : `${lowStockListings.length} products are running low on stock. Check your listings.`
+                      }
+                    </p>
+                  </div>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="shrink-0 border-red-200 hover:bg-red-50 dark:border-red-800 dark:text-red-400 font-bold rounded-xl h-9"
+                  onClick={() => router.push(routes.sellerListings())}
+                >
+                  Manage Stock
+                </Button>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <Card className="lg:col-span-2 border-0 bg-white/40 dark:bg-zinc-900/40 backdrop-blur-sm shadow-xl shadow-black/[0.03] ring-1 ring-black/5 dark:ring-white/5">

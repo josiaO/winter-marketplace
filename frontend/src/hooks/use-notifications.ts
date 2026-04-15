@@ -11,7 +11,7 @@ export function useNotifications(options: { disablePolling?: boolean } = {}) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [lastNotificationId, setLastNotificationId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const wsRef = useRef<WebSocket | null>(null);
 
   const { disablePolling } = options;
 
@@ -29,9 +29,9 @@ export function useNotifications(options: { disablePolling?: boolean } = {}) {
       // If we get a 401/403, stop polling permanently for this session
       if (error.status === 401 || error.status === 403) {
         globalFatalError = true;
-        if (pollIntervalRef.current) {
-          clearInterval(pollIntervalRef.current);
-          pollIntervalRef.current = null;
+        if (wsRef.current) {
+          wsRef.current.close();
+          wsRef.current = null;
         }
       }
       return 0;
@@ -39,33 +39,79 @@ export function useNotifications(options: { disablePolling?: boolean } = {}) {
   }, [isAuthenticated]);
 
   const stopPolling = useCallback(() => {
-    if (pollIntervalRef.current) {
-      clearInterval(pollIntervalRef.current);
-      pollIntervalRef.current = null;
+    if (wsRef.current) {
+      wsRef.current.close();
+      wsRef.current = null;
     }
   }, []);
 
   useEffect(() => {
     let isMounted = true;
 
-    const tick = async () => {
-      if (!isMounted || globalFatalError || document.visibilityState !== 'visible') return;
-      await fetchUnreadCount();
-    };
-
     if (isAuthenticated && !disablePolling && !globalFatalError) {
-      // Initial fetch
-      tick();
+      // 1. Initial fetch
+      fetchUnreadCount();
       
-      // Setup interval
-      pollIntervalRef.current = setInterval(tick, 60000);
+      // 2. Setup WebSocket connection for real-time notifications
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const hostname = window.location.hostname;
+      
+      // Map frontend hostname to backend API port (8000) for local development
+      let host = hostname;
+      if (hostname === 'localhost' || hostname === '127.0.0.1') {
+        host = `${hostname}:8000`;
+      } else if (window.location.port === '3000' || window.location.port === '3001') {
+        // Handle cases where we might be using a public tunnel or custom port
+        host = `${hostname}:8000`;
+      }
+
+      // 1. Resolve Token: Direct ApiClient access bypasses Zustand hydration delay
+      const token = useAuthStore.getState().accessToken || api.getAccessToken();
+      const wsUrl = `${protocol}//${host}/ws/notifications/`;
+      const b64url = (str: string) => btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      
+      const socket = token 
+        ? new WebSocket(wsUrl, ['sd-jwt', b64url(token)])
+        : new WebSocket(wsUrl);
+
+      console.log(`[NotificationWS] Connecting to ${wsUrl} (auth: ${!!token}, source: ${token === useAuthStore.getState().accessToken ? 'store' : 'api'})`);
+      
+      socket.onopen = () => {
+        console.log(`[NotificationWS] Connected to ${wsUrl}`);
+      };
+
+      socket.onerror = (error) => {
+        console.error(`[NotificationWS] Connection error for ${wsUrl}:`, error);
+      };
+
+      socket.onclose = (event) => {
+        if (event.code !== 1000) {
+          console.warn(`[NotificationWS] Closed unexpectedly (${event.code}) for ${wsUrl}`);
+        }
+      };
+
+      wsRef.current = socket;
+
+      socket.onmessage = (event) => {
+        if (!isMounted) return;
+        try {
+          const data = JSON.parse(event.data);
+          if (data.type === 'notification') {
+            // Increment unread count locally when a new notification comes in
+            // This will trigger the NotificationProvider to fetch the latest notification and show a toast
+            setUnreadCount((prev) => prev + 1);
+          }
+        } catch (err) {
+          console.error('WS Notification parsing error:', err);
+        }
+      };
     }
     
     return () => {
       isMounted = false;
-      if (pollIntervalRef.current) {
-        clearInterval(pollIntervalRef.current);
-        pollIntervalRef.current = null;
+      if (wsRef.current) {
+        wsRef.current.close();
+        wsRef.current = null;
       }
     };
   }, [isAuthenticated, disablePolling, fetchUnreadCount]);

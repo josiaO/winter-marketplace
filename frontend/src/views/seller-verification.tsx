@@ -12,10 +12,10 @@ import {
   Upload,
   X,
   Loader2,
-  ArrowLeft,
-  Info,
   BadgeCheck,
   FileText,
+  ChevronLeft,
+  Info,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -192,20 +192,20 @@ export function SellerVerificationPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <Button
-              variant="ghost"
+              variant="outline"
               size="icon"
+              className="rounded-full shadow-sm bg-white shrink-0"
               onClick={() => router.push(routes.sellerDashboard())}
-              className="shrink-0"
             >
-              <ArrowLeft className="w-5 h-5" />
+              <ChevronLeft className="w-5 h-5" />
             </Button>
             <div>
               <h1 className="text-2xl sm:text-3xl font-bold text-foreground">
                 Seller Verification
               </h1>
-              <p className="text-muted-foreground mt-1">
+              <p className="text-muted-foreground mt-1 text-sm">
                 Verify your account to build trust with buyers
               </p>
             </div>

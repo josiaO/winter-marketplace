@@ -339,13 +339,14 @@ def get_onboarding_completion_percentage(progress) -> int:
             
     return min(100, score)
 
-def unpublish_seller_listings(user_id: int) -> int:
-    """Unpublish all listings for a suspended or deleted seller."""
+def publish_seller_draft_listings(user_id: int) -> int:
+    """Publish all draft listings for a newly verified seller."""
+    from core.constants import ListingStatus
     return Listing.objects.filter(
         owner_id=user_id,
         deleted_at__isnull=True,
-        is_published=True,
-    ).update(is_published=False)
+        status=ListingStatus.DRAFT,
+    ).update(status=ListingStatus.ACTIVE, is_published=True)
 
 @transaction.atomic
 def approve_seller_identity(seller_profile, admin_user, notes=''):
@@ -361,6 +362,9 @@ def approve_seller_identity(seller_profile, admin_user, notes=''):
         raise ValueError("No identity documents on file (UserVerification missing).")
         
     verify_user_document(uv, 'id', status='verified', notes=notes, admin_user=admin_user)
+    
+    # NEW: Automatically activate any draft listings once identity is approved
+    publish_seller_draft_listings(seller_profile.user_id)
     
     # Reload profile to see synced status from signals
     seller_profile.refresh_from_db()

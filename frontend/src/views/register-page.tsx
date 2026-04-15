@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod/v4';
+import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { motion } from 'framer-motion';
 import {
@@ -242,7 +242,7 @@ export function RegisterPage() {
                   <Input
                     id="password"
                     type={showPassword ? 'text' : 'password'}
-                    placeholder="Min. 6 characters"
+                    placeholder="Min. 8 characters"
                     autoComplete="new-password"
                     className="pl-10 pr-10 h-11"
                     {...register('password')}

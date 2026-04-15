@@ -10,6 +10,7 @@ import {
   ChevronRight,
   ClipboardList,
   RotateCcw,
+  Star,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -251,8 +252,22 @@ export function OrdersPage() {
                     </div>
                     <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0" />
                   </div>
-                  {order.status === 'completed' && (
-                    <div className="mt-4 flex justify-end">
+                  {(order.status === 'completed' || order.status === 'delivered') && (
+                    <div className="mt-4 flex justify-end gap-2 items-center">
+                      {!order.review && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="rounded-lg border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            router.push(routes.order(String(order.id)));
+                          }}
+                        >
+                          <Star className="w-3.5 h-3.5 mr-1" />
+                          Leave Review
+                        </Button>
+                      )}
                       <Button
                         size="sm"
                         variant="outline"

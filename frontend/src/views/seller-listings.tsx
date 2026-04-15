@@ -16,6 +16,14 @@ import {
   Grid3X3,
   List,
   MoreHorizontal,
+  Trash2,
+  Plus,
+  Minus,
+  AlertTriangle,
+  ChevronLeft,
+  History,
+  CheckCircle,
+  Loader2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -35,12 +43,31 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatTZS, formatDate } from '@/lib/helpers';
 import { EmptyState } from '@/components/smartdalali/empty-state';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import type { Listing, PaginatedResponse } from '@/types/api';
 
 export function SellerListingsPage() {
@@ -51,6 +78,17 @@ export function SellerListingsPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
+  
+  // Deletion state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [listingToDelete, setListingToDelete] = useState<Listing | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Stock update state
+  const [isStockDialogOpen, setIsStockDialogOpen] = useState(false);
+  const [listingToUpdateStock, setListingToUpdateStock] = useState<Listing | null>(null);
+  const [newStock, setNewStock] = useState<number>(0);
+  const [isUpdatingStock, setIsUpdatingStock] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -78,6 +116,71 @@ export function SellerListingsPage() {
     }
     loadListings();
   }, [isAuthenticated, user, router]);
+
+  const loadListings = async () => {
+    setIsLoading(true);
+    try {
+      const data = await api.listings.sellerListings();
+      const anyData = data as any;
+      const items = (anyData?.results as Listing[] | undefined) ?? (Array.isArray(anyData) ? anyData : []);
+      setListings((items as Listing[]) || []);
+    } catch {
+      toast.error('Failed to load your listings.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteListing = async () => {
+    if (!listingToDelete) return;
+    setIsDeleting(true);
+    try {
+      await api.listings.delete(String(listingToDelete.id));
+      toast.success('Listing deleted successfully');
+      setListings(prev => prev.filter(l => l.id !== listingToDelete.id));
+      setIsDeleteDialogOpen(false);
+    } catch (err) {
+      toast.error('Failed to delete listing');
+    } finally {
+      setIsDeleting(false);
+      setListingToDelete(null);
+    }
+  };
+
+  const handleUpdateStock = async () => {
+    if (!listingToUpdateStock) return;
+    setIsUpdatingStock(true);
+    try {
+      await api.listings.update(String(listingToUpdateStock.id), {
+        id: listingToUpdateStock.id,
+        stock_quantity: newStock,
+        track_inventory: true, // Ensure it's tracked if updating
+      });
+      toast.success('Stock updated');
+      setListings(prev => prev.map(l => l.id === listingToUpdateStock.id ? { ...l, stock_quantity: newStock } : l));
+      setIsStockDialogOpen(false);
+    } catch (err) {
+      toast.error('Failed to update stock');
+    } finally {
+      setIsUpdatingStock(false);
+      setListingToUpdateStock(null);
+    }
+  };
+
+  const toggleStatus = async (listing: Listing) => {
+    const newStatus = listing.status === 'published' ? 'draft' : 'published';
+    try {
+      await api.listings.update(String(listing.id), {
+        id: listing.id,
+        status: newStatus,
+        is_published: newStatus === 'published',
+      });
+      toast.success(`Listing ${newStatus === 'published' ? 'activated' : 'deactivated'}`);
+      setListings(prev => prev.map(l => l.id === listing.id ? { ...l, status: newStatus } : l));
+    } catch (err) {
+      toast.error('Failed to update status');
+    }
+  };
 
   const filteredListings = useMemo(() => {
     let filtered = listings;
@@ -142,13 +245,23 @@ export function SellerListingsPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
         >
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Listings</h1>
-            <p className="text-muted-foreground mt-1">
-              Manage your product listings
-            </p>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-sm bg-white shrink-0"
+              onClick={() => router.back()}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Listings</h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                Manage your product listings
+              </p>
+            </div>
           </div>
-          <Button className="gap-2 shrink-0" onClick={() => router.push(routes.sellerListingNew())}>
+          <Button className="gap-2 shrink-0 shadow-lg shadow-emerald-500/20" onClick={() => router.push(routes.sellerListingNew())}>
             <Package className="w-4 h-4" />
             Add New Listing
           </Button>
@@ -275,6 +388,7 @@ export function SellerListingsPage() {
                         <TableHead>Product</TableHead>
                         <TableHead>Category</TableHead>
                         <TableHead className="text-right">Price</TableHead>
+                        <TableHead>Inventory</TableHead>
                         <TableHead>Status</TableHead>
                         <TableHead className="hidden sm:table-cell">Created</TableHead>
                         <TableHead className="w-12"></TableHead>
@@ -324,6 +438,30 @@ export function SellerListingsPage() {
                                 </span>
                               </TableCell>
                               <TableCell className="py-3 px-4">
+                                {(listing as any).track_inventory !== false ? (
+                                  <div 
+                                    className="flex items-center gap-2 group/stock cursor-pointer"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setListingToUpdateStock(listing);
+                                      setNewStock(listing.stock_quantity ?? 0);
+                                      setIsStockDialogOpen(true);
+                                    }}
+                                  >
+                                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                      (listing.stock_quantity ?? 0) <= ((listing as any).low_stock_threshold ?? 5)
+                                        ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+                                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'
+                                    }`}>
+                                      {listing.stock_quantity ?? 0} in stock
+                                    </span>
+                                    <Edit3 className="w-3 h-3 opacity-0 group-hover/stock:opacity-100 transition-opacity" />
+                                  </div>
+                                ) : (
+                                  <span className="text-xs text-muted-foreground italic">Unlimited</span>
+                                )}
+                              </TableCell>
+                              <TableCell className="py-3 px-4">
                                 {getStatusBadge(listing.status)}
                               </TableCell>
                               <TableCell className="py-3 px-4 hidden sm:table-cell">
@@ -357,22 +495,25 @@ export function SellerListingsPage() {
                                       <Edit3 className="w-4 h-4 mr-2" />
                                       Edit
                                     </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        toast.info(
-                                          listing.status === 'published'
-                                            ? 'Product deactivated.'
-                                            : 'Product activated.'
-                                        );
-                                      }}
-                                    >
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={(e) => { e.stopPropagation(); toggleStatus(listing); }}>
                                       {listing.status === 'published' ? (
                                         <ToggleRight className="w-4 h-4 mr-2" />
                                       ) : (
                                         <ToggleLeft className="w-4 h-4 mr-2" />
                                       )}
                                       {listing.status === 'published' ? 'Deactivate' : 'Activate'}
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem
+                                      className="text-destructive focus:text-destructive"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setListingToDelete(listing);
+                                        setIsDeleteDialogOpen(true);
+                                      }}
+                                    >
+                                      <Trash2 className="w-4 h-4 mr-2" />
+                                      Delete
                                     </DropdownMenuItem>
                                   </DropdownMenuContent>
                                 </DropdownMenu>
@@ -440,6 +581,89 @@ export function SellerListingsPage() {
             </AnimatePresence>
           </div>
         )}
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="w-5 h-5" />
+                Delete Listing?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{listingToDelete?.title}</strong>? This action cannot be undone and will remove the product from the marketplace.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteListing();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete Listing"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Quick Stock Update Dialog */}
+        <Dialog open={isStockDialogOpen} onOpenChange={setIsStockDialogOpen}>
+          <DialogContent className="sm:max-w-[400px]">
+            <DialogHeader>
+              <DialogTitle>Update Stock</DialogTitle>
+              <DialogDescription>
+                Quickly adjust available quantity for this product.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="py-6 flex flex-col items-center justify-center gap-4">
+              <div className="text-center">
+                <p className="text-sm font-medium text-muted-foreground truncate max-w-[300px] mb-4">
+                  {listingToUpdateStock?.title}
+                </p>
+                <div className="flex items-center gap-6">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-12 w-12 rounded-full"
+                    onClick={() => setNewStock(prev => Math.max(0, prev - 1))}
+                  >
+                    <Minus className="w-6 h-6" />
+                  </Button>
+                  <div className="text-center w-24">
+                    <input
+                      type="number"
+                      value={newStock}
+                      onChange={(e) => setNewStock(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="text-4xl font-bold bg-transparent text-center w-full focus:outline-none"
+                    />
+                    <p className="text-[10px] uppercase tracking-wider text-muted-foreground mt-1">Available Units</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-12 w-12 rounded-full"
+                    onClick={() => setNewStock(prev => prev + 1)}
+                  >
+                    <Plus className="w-6 h-6" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="ghost" onClick={() => setIsStockDialogOpen(false)} disabled={isUpdatingStock}>
+                Cancel
+              </Button>
+              <Button onClick={handleUpdateStock} disabled={isUpdatingStock} className="gap-2">
+                {isUpdatingStock ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }

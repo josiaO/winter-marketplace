@@ -100,6 +100,7 @@ class ListingViewSet(viewsets.ModelViewSet):
             'owner__trust_score',
             'category',
             'store',
+            'marketplaceitem',
         ).prefetch_related('media', 'likes')
         
         if user.is_authenticated:

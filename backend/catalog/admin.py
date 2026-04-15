@@ -38,6 +38,7 @@ class CategoryAdmin(admin.ModelAdmin):
         'name', 'slug', 'vertical', 'parent', 'is_active',
         'order', 'field_count', 'created_at'
     )
+    list_select_related = ('parent',)
     list_filter = (
         'vertical', 'is_active', 'is_service', 'is_physical',
         'parent', 'created_at'

@@ -15,11 +15,11 @@ interface RoleGuardProps {
 }
 
 export function RoleGuard({ kind, children }: RoleGuardProps) {
-  const { user, isAuthenticated, isLoading } = useAuthStore();
+  const { user, isAuthenticated, isLoading, isHydrated } = useAuthStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (isLoading) return;
+    if (!isHydrated) return;
 
     if (!isAuthenticated || !user) {
       router.replace(routes.login());
@@ -36,12 +36,18 @@ export function RoleGuard({ kind, children }: RoleGuardProps) {
       toast.error('Seller access is required for this area.');
       router.replace(routes.sellerRegister());
     }
-  }, [kind, isAuthenticated, user, isLoading, router]);
+  }, [kind, isHydrated, isAuthenticated, user, isLoading, router]);
 
-  if (isLoading) {
+  // We only block if the storage hasn't been rehydrated yet. 
+  // We no longer block on background profile syncing (isLoading) because 
+  // components have their own internal loading states and can handle partial user data.
+  if (!isHydrated) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center text-sm text-muted-foreground">
-        Loading…
+        <div className="flex flex-col items-center gap-2">
+          <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+          <span>Initializing…</span>
+        </div>
       </div>
     );
   }

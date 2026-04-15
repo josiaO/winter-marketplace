@@ -51,6 +51,10 @@ const listingSchema = z
     listing_type: z.literal('sale').default('sale'),
     delivery_is_free: z.boolean(),
     delivery_fee: z.coerce.number().min(0).optional(),
+    track_inventory: z.boolean().default(false),
+    stock_quantity: z.coerce.number().min(0).default(0),
+    low_stock_threshold: z.coerce.number().min(0).default(5),
+    allow_backorders: z.boolean().default(false),
   })
   .superRefine((data, ctx) => {
     if (!data.delivery_is_free) {
@@ -139,7 +143,7 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
   const [flatCategories, setFlatCategories] = useState<Array<{ id: number; name: string; depth: number }>>([]);
   const [existingImages, setExistingImages] = useState<Listing['images']>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
-  const [previews, setPreviews] = useState<string[]>([]);
+  const [previews, setPreviews] = useState<{ src: string; isVideo: boolean }[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingCategories, setIsLoadingCategories] = useState(true);
@@ -161,6 +165,10 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
       listing_type: 'sale' as const,
       delivery_is_free: true,
       delivery_fee: 0,
+      track_inventory: false,
+      stock_quantity: 0,
+      low_stock_threshold: 5,
+      allow_backorders: false,
     },
   });
 
@@ -201,12 +209,19 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
           listing_type: 'sale' as const,
           delivery_is_free: data.delivery_is_free !== false,
           delivery_fee: Number(data.delivery_fee ?? 0) || 0,
+          track_inventory: (data as any).track_inventory ?? false,
+          stock_quantity: data.stock_quantity ?? 0,
+          low_stock_threshold: (data as any).low_stock_threshold ?? 5,
+          allow_backorders: (data as any).allow_backorders ?? false,
         });
 
         setSpecs(((data as any).specs && typeof (data as any).specs === 'object') ? ((data as any).specs as Record<string, unknown>) : {});
 
         // Set previews for existing images
-        const existingPreviews = (data.images || []).map((img) => img.image);
+        const existingPreviews = (data.images || []).map((img) => ({
+          src: (img.image || (img as any).url) as string,
+          isVideo: (img as any).media_type === 'video' || ((img.image || (img as any).url) || '').match(/\.(mp4|webm)$/i) != null,
+        }));
         setPreviews(existingPreviews);
       } catch {
         toast.error('Failed to load listing.');
@@ -264,18 +279,23 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
       return;
     }
     const validFiles = Array.from(files)
-      .filter((f) => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024)
+      .filter((f) => {
+        if (f.type.startsWith('image/')) return f.size <= 5 * 1024 * 1024;
+        if (f.type.startsWith('video/')) return f.size <= 50 * 1024 * 1024 && (f.type === 'video/mp4' || f.type === 'video/webm');
+        return false;
+      })
       .slice(0, maxNew);
 
     if (validFiles.length === 0) {
-      toast.error('Please upload image files under 5MB.');
+      toast.error('Please upload images under 5MB or videos (MP4/WEBM) under 50MB.');
       return;
     }
     setNewImages((prev) => [...prev, ...validFiles]);
     validFiles.forEach((file) => {
+      const isVideo = file.type.startsWith('video/');
       const reader = new FileReader();
       reader.onload = (e) => {
-        setPreviews((prev) => [...prev, e.target?.result as string]);
+        setPreviews((prev) => [...prev, { src: e.target?.result as string, isVideo }]);
       };
       reader.readAsDataURL(file);
     });
@@ -284,7 +304,9 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
   const removeExistingImage = useCallback((imageId: number) => {
     setExistingImages((prev) => prev.filter((img) => img.id !== imageId));
     setPreviews((prev) => {
-      const idx = prev.findIndex((p) => p === existingImages.find((i) => i.id === imageId)?.image);
+      const imgTarget = existingImages.find((i) => i.id === imageId);
+      const url = imgTarget?.image || (imgTarget as any)?.url;
+      const idx = prev.findIndex((p) => p.src === url);
       if (idx >= 0) return prev.filter((_, i) => i !== idx);
       return prev;
     });
@@ -398,6 +420,10 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
         ...(!data.delivery_is_free ? { delivery_fee: data.delivery_fee } : {}),
         ...(Object.keys(specsPayload).length > 0 ? { specs: specsPayload } : { specs: {} }),
         ...(newImages.length > 0 ? { images: newImages } : {}),
+        track_inventory: data.track_inventory,
+        stock_quantity: data.stock_quantity,
+        low_stock_threshold: data.low_stock_threshold,
+        allow_backorders: data.allow_backorders,
       });
       toast.success('Listing updated successfully!');
       router.push(routes.sellerListings());
@@ -623,6 +649,92 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
             </Card>
           </motion.div>
 
+          {/* Inventory & Stock */}
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.06 }}
+          >
+            <Card className="border-0 shadow-md shadow-black/5">
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">Inventory & Stock</CardTitle>
+                <CardDescription>
+                  Manage product availability and stock levels
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
+                  <Checkbox
+                    id="track_inventory"
+                    checked={form.watch('track_inventory')}
+                    onCheckedChange={(c) => form.setValue('track_inventory', c === true)}
+                    className="mt-0.5"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <Label htmlFor="track_inventory" className="cursor-pointer font-medium">
+                      Track inventory for this item
+                    </Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      Enable this to manage stock levels and prevent overselling.
+                    </p>
+                  </div>
+                </div>
+
+                {form.watch('track_inventory') && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4"
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="stock_quantity">Current Stock *</Label>
+                      <Input
+                        id="stock_quantity"
+                        type="number"
+                        min={0}
+                        {...form.register('stock_quantity', { valueAsNumber: true })}
+                        className={form.formState.errors.stock_quantity ? 'border-destructive' : ''}
+                      />
+                      {form.formState.errors.stock_quantity && (
+                        <p className="text-xs text-destructive">{form.formState.errors.stock_quantity.message}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="low_stock_threshold">Low Stock Alert Level</Label>
+                      <Input
+                        id="low_stock_threshold"
+                        type="number"
+                        min={0}
+                        {...form.register('low_stock_threshold', { valueAsNumber: true })}
+                        className={form.formState.errors.low_stock_threshold ? 'border-destructive' : ''}
+                      />
+                      <p className="text-[10px] text-muted-foreground">
+                        We'll notify you when stock falls below this level.
+                      </p>
+                    </div>
+
+                    <div className="flex items-start gap-3 col-span-full pt-2">
+                      <Checkbox
+                        id="allow_backorders"
+                        checked={form.watch('allow_backorders')}
+                        onCheckedChange={(c) => form.setValue('allow_backorders', c === true)}
+                        className="mt-0.5"
+                      />
+                      <div>
+                        <Label htmlFor="allow_backorders" className="cursor-pointer font-medium">
+                          Allow backorders
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Customers can still purchase this item even if it's out of stock.
+                        </p>
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </CardContent>
+            </Card>
+          </motion.div>
+
           {/* Category-specific fields */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -812,11 +924,11 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
                       const isExisting = index < existingImages.length;
                       return (
                         <div key={`${isExisting ? 'existing' : 'new'}-${index}`} className="relative group aspect-square rounded-lg overflow-hidden bg-muted">
-                          <img
-                            src={preview}
-                            alt={`Image ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
+                          {preview.isVideo ? (
+                            <video src={preview.src} className="w-full h-full object-cover bg-black" muted playsInline />
+                          ) : (
+                            <img src={preview.src} alt={`Image ${index + 1}`} className="w-full h-full object-cover" />
+                          )}
                           {index === 0 && (
                             <div className="absolute top-1 left-1">
                               <span className="text-[10px] font-semibold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
@@ -861,7 +973,7 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
                     <input
                       ref={fileInputRef}
                       type="file"
-                      accept="image/*"
+                      accept="image/*,video/mp4,video/webm"
                       multiple
                       className="hidden"
                       onChange={(e) => {
@@ -871,10 +983,10 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
                     />
                     <ImagePlus className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
                     <p className="text-sm font-medium text-foreground">
-                      Add more images
+                      Add more media
                     </p>
                     <p className="text-xs text-muted-foreground mt-1">
-                      PNG, JPG, WEBP up to 5MB each · {8 - totalImageCount} remaining
+                      PNG/JPG/WEBP (max 5MB) · MP4/WEBM (max 50MB) · {8 - totalImageCount} remaining
                     </p>
                   </div>
                 )}

@@ -22,7 +22,7 @@ class VisitorTrackingMiddleware:
 
         # 2. Dispatch to Celery task for async persistence
         # Only track if we have a valid session key to avoid IntegrityErrors in workers.
-        if session_key:
+        if should_track and session_key:
             try:
                 track_visitor_event_task.delay(
                     session_key=session_key,
@@ -30,8 +30,8 @@ class VisitorTrackingMiddleware:
                     user_agent=user_agent,
                     path=path,
                     method=request.method,
-                    event_type='page_view' if should_track else None,
-                    metadata={'path': path, 'method': request.method} if should_track else {}
+                    event_type='page_view',
+                    metadata={'path': path, 'method': request.method}
                 )
             except Exception:
                 # Silently fail analytics capture to maintain site availability

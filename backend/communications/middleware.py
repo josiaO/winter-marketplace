@@ -88,12 +88,19 @@ def get_user(token_key):
     try:
         access_token = AccessToken(token_key)
         user_id = access_token["user_id"]
-        return User.objects.get(id=user_id)
-    except (InvalidToken, TokenError, User.DoesNotExist) as e:
-        print(f"❌ WebSocket Auth Failed: {e}")  # Debug log
+        user = User.objects.get(id=user_id)
+        print(f"✅ WebSocket Auth Success: User {user.username} (ID: {user.id})")
+        return user
+    except (InvalidToken, TokenError) as e:
+        print(f"❌ WebSocket Auth Failed (Token Error): {e}")
+        return AnonymousUser()
+    except User.DoesNotExist:
+        print(f"❌ WebSocket Auth Failed (User Not Found)")
         return AnonymousUser()
     except Exception as e:
-        print(f"❌ WebSocket Auth Unexpected Error: {e}")  # specific log
+        import traceback
+        print(f"❌ WebSocket Auth Unexpected Error: {e}")
+        traceback.print_exc()
         return AnonymousUser()
 
 
@@ -109,10 +116,18 @@ class JWTAuthMiddleware:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        token = _extract_jwt_token(scope)
-        if token:
-            scope["user"] = await get_user(token)
-        else:
-            scope["user"] = AnonymousUser()
+        try:
+            print(f"DEBUG: WebSocket request for {scope.get('path')} from {scope.get('client')}")
+            token = _extract_jwt_token(scope)
+            if token:
+                scope["user"] = await get_user(token)
+            else:
+                print("DEBUG: No token found in WebSocket request")
+                scope["user"] = AnonymousUser()
 
-        return await self.app(scope, receive, send)
+            return await self.app(scope, receive, send)
+        except Exception as e:
+            import traceback
+            print(f"❌ WebSocket Middleware Error: {e}")
+            traceback.print_exc()
+            raise

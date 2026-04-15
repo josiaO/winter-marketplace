@@ -108,3 +108,22 @@ def send_business_approval_notification(self, seller_id):
     except Exception as exc:
         logger.exception('send_business_approval_notification failed')
         raise self.retry(exc=exc, countdown=60)
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_seller_verified_push(self, seller_id):
+    try:
+        sp = SellerProfile.objects.select_related('user').get(pk=seller_id)
+    except SellerProfile.DoesNotExist:
+        return
+    try:
+        from core.services.notifications import PushNotificationService
+        PushNotificationService().send_push(
+            sp.user,
+            'Hongera! Akaunti yako imeidhinishwa',
+            'Duka lako sasa linaonekana kwa wanunuzi Tanzania nzima.',
+            data={'type': 'seller_verified', 'seller_id': str(sp.pk)},
+        )
+    except Exception as exc:
+        logger.exception('send_seller_verified_push failed')
+        raise self.retry(exc=exc, countdown=60)

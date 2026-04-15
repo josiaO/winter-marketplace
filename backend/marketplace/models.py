@@ -49,6 +49,14 @@ class SellerProfile(BaseModel):
     Seller profile for marketplace sellers.
     Extends user account with seller-specific information.
     """
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Capture current values for 'save()' signals without triggering DB lookups for deferred fields.
+        # Direct access to self.field triggers refresh_from_db if deferred, leading to recursion.
+        self._presale_verification_status = self.__dict__.get('verification_status')
+        self._presale_total_sales = self.__dict__.get('total_sales')
+        self._presale_completed_orders = self.__dict__.get('completed_orders')
+
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,

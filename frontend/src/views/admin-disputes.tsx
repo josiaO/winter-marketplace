@@ -20,6 +20,7 @@ import {
   XCircle,
   Search,
   MessageSquare,
+  ChevronLeft,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -388,14 +389,24 @@ export function AdminDisputesPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
         >
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-              <AlertTriangle className="w-7 h-7 text-emerald-600" />
-              Order Disputes
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Review and resolve order disputes between buyers and sellers
-            </p>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-sm bg-white shrink-0"
+              onClick={() => router.push(routes.adminDashboard())}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
+                <AlertTriangle className="w-7 h-7 text-emerald-600" />
+                Order Disputes
+              </h1>
+              <p className="text-muted-foreground mt-1">
+                Review and resolve order disputes between buyers and sellers
+              </p>
+            </div>
           </div>
           <Button
             variant="outline"
@@ -403,7 +414,7 @@ export function AdminDisputesPage() {
             onClick={() => router.push(routes.adminDashboard())}
           >
             <ArrowUpRight className="w-4 h-4" />
-            Back to Dashboard
+            Dashboard
           </Button>
         </motion.div>
 

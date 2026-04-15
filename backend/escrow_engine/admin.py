@@ -274,6 +274,7 @@ class TransactionAdmin(admin.ModelAdmin):
         'buyer_display', 'seller_display', 'payment_method',
         'auto_release_display', 'created_at',
     ]
+    list_select_related = ('buyer_user', 'seller_user', 'linked_order')
     list_filter = [
         'status', 'source', 'currency', 'payment_method',
         ('created_at', admin.DateFieldListFilter),
@@ -485,6 +486,7 @@ class TransactionLogAdmin(admin.ModelAdmin):
         'transaction_link', 'from_status_badge', 'to_status_badge',
         'actor_col', 'reason', 'created_at',
     ]
+    list_select_related = ('transaction', 'actor_user')
     list_filter = ['from_status', 'to_status', ('created_at', admin.DateFieldListFilter)]
     search_fields = ['transaction__reference', 'actor_user__username', 'actor_label', 'reason']
     readonly_fields = [
@@ -528,6 +530,7 @@ class PayoutAdmin(admin.ModelAdmin):
         'id', 'transaction_link', 'seller', 'amount_display',
         'payout_method', 'status_badge_col', 'payout_reference', 'created_at',
     ]
+    list_select_related = ('transaction', 'seller')
     list_filter = ['status', 'payout_method', ('created_at', admin.DateFieldListFilter)]
     search_fields = ['seller__username', 'payout_reference', 'transaction__reference']
     readonly_fields = [
@@ -603,6 +606,7 @@ class PayoutDestinationAdmin(admin.ModelAdmin):
         'user', 'method_badge', 'account_number', 'account_name',
         'bank_code', 'is_default', 'created_at',
     ]
+    list_select_related = ('user',)
     list_filter = ['method', 'is_default']
     search_fields = ['user__username', 'account_number', 'account_name']
     readonly_fields = ['created_at', 'updated_at']
@@ -638,6 +642,7 @@ class DisputeAdmin(admin.ModelAdmin):
         'id', 'transaction_link', 'status_badge_col', 'resolution_type',
         'opened_by', 'resolved_by', 'created_at',
     ]
+    list_select_related = ('transaction', 'opened_by', 'resolved_by')
     list_filter = [
         'status', 'resolution_type',
         ('created_at', admin.DateFieldListFilter),
@@ -752,6 +757,7 @@ class PaymentRecordAdmin(admin.ModelAdmin):
         'amount_col',
         'reference_excerpt',
     ]
+    list_select_related = ('transaction', 'order')
     list_filter = ['status', 'provider', ('created_at', admin.DateFieldListFilter)]
     search_fields = [
         'reference',
@@ -837,6 +843,7 @@ class PaymentLinkAdmin(admin.ModelAdmin):
         'expires_at',
         'valid_badge',
     ]
+    list_select_related = ('transaction', 'created_by')
     list_filter = ['is_used', 'otp_verified', ('expires_at', admin.DateFieldListFilter)]
     search_fields = ['token', 'transaction__reference', 'buyer_phone_verified', 'title']
     readonly_fields = [
@@ -916,6 +923,7 @@ class PaymentLinkAdmin(admin.ModelAdmin):
 @admin.register(GatewayEvent)
 class GatewayEventAdmin(admin.ModelAdmin):
     list_display = ['id', 'provider', 'event_id_short', 'status', 'transaction_link', 'created_at']
+    list_select_related = ('transaction',)
     list_filter = ['provider', 'status', ('created_at', admin.DateFieldListFilter)]
     search_fields = ['event_id', 'transaction__reference']
     readonly_fields = [

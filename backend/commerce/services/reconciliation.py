@@ -104,7 +104,7 @@ def _check_order_transaction(
         txn = None
 
     if txn is None:
-        if order.status != 'pending' and (order.total_amount or 0) > 0:
+        if order.status not in ('pending', 'cancelled') and (order.total_amount or 0) > 0:
             _issue(
                 stats,
                 'ORDER_MISSING_TRANSACTION',

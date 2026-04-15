@@ -11,6 +11,7 @@ import {
   Trash2,
   FolderTree,
   RefreshCw,
+  ChevronLeft,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -34,6 +35,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import {
   Table,
   TableBody,
@@ -142,6 +153,12 @@ export function AdminCatalogPage() {
     order: 0,
     choicesText: '', // one per line
   });
+
+  // Delete alert state
+  const [deleteCatDialogOpen, setDeleteCatDialogOpen] = useState(false);
+  const [catToDelete, setCatToDelete] = useState<CategoryRow | null>(null);
+  const [deleteFieldDialogOpen, setDeleteFieldDialogOpen] = useState(false);
+  const [fieldToDelete, setFieldToDelete] = useState<CategoryFieldRow | null>(null);
 
   useEffect(() => {
     if (!isAuthenticated || user?.role !== 'admin') {
@@ -282,14 +299,19 @@ export function AdminCatalogPage() {
     }
   };
 
-  const deleteCategory = async () => {
-    if (!selectedCategoryId) return;
-    const ok = window.confirm('Delete this category? This will also delete its subcategories and fields.');
-    if (!ok) return;
+  const confirmDeleteCategory = () => {
+    if (!selected) return;
+    setCatToDelete(selected);
+    setDeleteCatDialogOpen(true);
+  };
+
+  const handleDeleteCategory = async () => {
+    if (!catToDelete) return;
     try {
-      await api.catalog.deleteCategory(selectedCategoryId);
+      await api.catalog.deleteCategory(catToDelete.id);
       toast.success('Category deleted');
       setSelectedCategoryId(null);
+      setCatToDelete(null);
       await refreshCategories();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete category');
@@ -382,13 +404,17 @@ export function AdminCatalogPage() {
     }
   };
 
-  const deleteField = async (id: number) => {
-    if (!selectedCategoryId) return;
-    const ok = window.confirm('Delete this field?');
-    if (!ok) return;
+  const confirmDeleteField = (f: CategoryFieldRow) => {
+    setFieldToDelete(f);
+    setDeleteFieldDialogOpen(true);
+  };
+
+  const handleDeleteField = async () => {
+    if (!fieldToDelete || !selectedCategoryId) return;
     try {
-      await api.catalog.deleteCategoryField(id);
+      await api.catalog.deleteCategoryField(fieldToDelete.id);
       toast.success('Field deleted');
+      setFieldToDelete(null);
       await refreshFields(selectedCategoryId);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to delete field');
@@ -399,19 +425,29 @@ export function AdminCatalogPage() {
     <div className="min-h-[80vh] px-4 py-8">
       <div className="max-w-6xl mx-auto space-y-6">
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Catalog Management</h1>
-              <p className="text-muted-foreground mt-1">
-                Manage categories, subcategories, and dynamic listing fields.
-              </p>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-full shadow-sm bg-white shrink-0"
+                onClick={() => router.back()}
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </Button>
+              <div>
+                <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Catalog Management</h1>
+                <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                  Manage categories, subcategories, and dynamic listing fields.
+                </p>
+              </div>
             </div>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <Button variant="outline" onClick={() => void refreshCategories()} className="gap-2">
                 <RefreshCw className="w-4 h-4" />
                 Refresh
               </Button>
-              <Button onClick={openCreateCategory} className="gap-2">
+              <Button onClick={openCreateCategory} className="gap-2 shrink-0">
                 <Plus className="w-4 h-4" />
                 New Category
               </Button>
@@ -461,7 +497,7 @@ export function AdminCatalogPage() {
                       <Pencil className="w-4 h-4" />
                       Edit
                     </Button>
-                    <Button variant="destructive" onClick={() => void deleteCategory()} disabled={!selectedCategoryId} className="gap-2">
+                    <Button variant="destructive" onClick={() => void confirmDeleteCategory()} disabled={!selectedCategoryId} className="gap-2">
                       <Trash2 className="w-4 h-4" />
                       Delete
                     </Button>
@@ -530,7 +566,7 @@ export function AdminCatalogPage() {
                                   <Pencil className="w-3.5 h-3.5" />
                                   Edit
                                 </Button>
-                                <Button variant="destructive" size="sm" onClick={() => void deleteField(f.id)} className="gap-2">
+                                 <Button variant="destructive" size="sm" onClick={() => void confirmDeleteField(f)} className="gap-2">
                                   <Trash2 className="w-3.5 h-3.5" />
                                   Delete
                                 </Button>
@@ -785,6 +821,51 @@ export function AdminCatalogPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Delete Category Alert ────────────────────────────────────────── */}
+      <AlertDialog open={deleteCatDialogOpen} onOpenChange={setDeleteCatDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete the category "{catToDelete?.name}" and all of its
+              subcategories and dynamic fields. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setCatToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleDeleteCategory()}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* ── Delete Field Alert ────────────────────────────────────────────── */}
+      <AlertDialog open={deleteFieldDialogOpen} onOpenChange={setDeleteFieldDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove field?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the "{fieldToDelete?.field_label}" field from this category.
+              Existing data for this field on listings will remain but the field won't show
+              up in forms.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setFieldToDelete(null)}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void handleDeleteField()}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

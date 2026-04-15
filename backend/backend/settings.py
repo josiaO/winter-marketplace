@@ -242,7 +242,7 @@ INSTALLED_APPS = [
     'debug_toolbar',
 ]
 
-if (DEBUG or ENABLE_CACHALOT) and not ENABLE_SILK:
+if ENABLE_CACHALOT and not ENABLE_SILK:
     INSTALLED_APPS.append('cachalot')
 
 if ENABLE_SILK:

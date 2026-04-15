@@ -12,6 +12,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   accessToken: string | null;
+  isHydrated: boolean;
 }
 
 interface AuthActions {
@@ -29,6 +30,8 @@ interface AuthActions {
   updateUser: (partial: Partial<User>) => void;
   /** Replace the full user object in the store (used after login/register) */
   setUser: (user: User) => void;
+  /** Set hydrated state */
+  setHydrated: () => void;
 }
 
 export type AuthStore = AuthState & AuthActions;
@@ -45,6 +48,7 @@ export const useAuthStore = create<AuthStore>()(
       isAuthenticated: false,
       isLoading: false,
       accessToken: null,
+      isHydrated: false,
 
       // ── Actions ────────────────────────────────────────────────────────────
 
@@ -54,18 +58,19 @@ export const useAuthStore = create<AuthStore>()(
           const res = await api.auth.login({ email, password });
           // Save tokens via ApiClient
           api.setTokens(res.access, res.refresh);
+          
+          // Set initial user info from login response ASAP
           set({
             user: res.user,
             isAuthenticated: true,
             accessToken: res.access,
           });
-          // Fetch full profile (may include seller_profile, groups, etc.)
-          try {
-            const fullUser = await api.auth.me();
-            set({ user: fullUser });
-          } catch {
-            // Keep the user from login response if me() fails
-          }
+
+          // Fetch full profile in background but don't block the login flow
+          // unless necessary. Actually, we'll fetch it now but only await it 
+          // if we want to be 100% sure. For better UX, we'll update the store
+          // whenever it arrives.
+          void get().fetchUser();
         } finally {
           set({ isLoading: false });
         }
@@ -102,10 +107,12 @@ export const useAuthStore = create<AuthStore>()(
       },
 
       fetchUser: async () => {
+        // If we don't even have a token, we aren't authenticated locally.
         if (!api.isAuthenticated()) {
-          set({ user: null, isAuthenticated: false, accessToken: null });
+          set({ user: null, isAuthenticated: false, accessToken: null, isLoading: false });
           return;
         }
+
         set({ isLoading: true });
         try {
           const user = await api.auth.me();
@@ -113,10 +120,14 @@ export const useAuthStore = create<AuthStore>()(
             user,
             isAuthenticated: true,
             accessToken: api.getAccessToken(),
+            isLoading: false,
           });
-        } catch {
-          set({ user: null, isAuthenticated: false, accessToken: null });
-        } finally {
+        } catch (error) {
+          console.error('Profile sync failed:', error);
+          // If profile fetch fails with 401, it means tokens are invalid.
+          if (api.isUnauthorized(error)) {
+            await get().logout();
+          }
           set({ isLoading: false });
         }
       },
@@ -147,6 +158,8 @@ export const useAuthStore = create<AuthStore>()(
       setUser: (user: User) => {
         set({ user, isAuthenticated: true });
       },
+
+      setHydrated: () => set({ isHydrated: true }),
     }),
     {
       name: 'smartdalali-auth',
@@ -155,18 +168,28 @@ export const useAuthStore = create<AuthStore>()(
       // The user object is NOT persisted to avoid stale data.
       partialize: (state) => ({
         isAuthenticated: state.isAuthenticated,
+        user: state.user, // Persist user to show immediate UI on reload
       }),
 
       // After Zustand rehydrates from storage, check if the ApiClient still
       // has valid tokens.  If so, hydrate the user from the backend.
       onRehydrateStorage: () => {
-        return (_state, error) => {
-          if (error) return;
+        return (state, error) => {
+          if (error || !state) {
+            setTimeout(() => useAuthStore.setState({ isHydrated: true }), 0);
+            return;
+          }
+
+          // If we are authenticated, refresh the user in the background
           if (api.isAuthenticated()) {
-            // Use queueMicrotask to avoid blocking the rehydration path
+            state.setHydrated();
+            
+            // Background fetch to ensure data is fresh
             queueMicrotask(() => {
-              useAuthStore.getState().fetchUser();
+              void state.fetchUser();
             });
+          } else {
+            state.setHydrated();
           }
         };
       },

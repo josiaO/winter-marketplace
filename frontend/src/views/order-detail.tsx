@@ -155,6 +155,13 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
   const [evidenceImages, setEvidenceImages] = useState<File[]>([]);
   const [evidenceVideo, setEvidenceVideo] = useState<File | null>(null);
 
+  // Review states
+  const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [reviewPhotos, setReviewPhotos] = useState<File[]>([]);
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+
   const fetchOrder = useCallback(async () => {
     if (!orderId) return;
     setIsLoading(true);
@@ -260,6 +267,31 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
       toast.error(msg);
     } finally {
       setIsDisputing(false);
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!order) return;
+    setIsSubmittingReview(true);
+    try {
+      await api.commerce.reviewOrder(
+        order.id,
+        { rating: reviewRating, comment: reviewComment },
+        reviewPhotos.length > 0 ? reviewPhotos : undefined,
+      );
+      toast.success('Review submitted successfully!');
+      setReviewDialogOpen(false);
+      setReviewPhotos([]);
+      setReviewComment('');
+      fetchOrder();
+    } catch (err: unknown) {
+      const msg =
+        err instanceof ApiClientError
+          ? err.detail || err.message
+          : 'Failed to submit review';
+      toast.error(msg);
+    } finally {
+      setIsSubmittingReview(false);
     }
   };
 
@@ -403,14 +435,15 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
             )}
           </Button>
         )}
-        {order.status === 'delivered' && (
+        {(order.status === 'delivered' || order.status === 'completed') && (
           <Button
             variant="outline"
-            className="rounded-xl"
-            onClick={() => router.push(routes.product(String(order.items[0]?.listing?.id || '')))}
+            className="rounded-xl border-emerald-500 text-emerald-600 hover:bg-emerald-50"
+            onClick={() => setReviewDialogOpen(true)}
+            disabled={!!order.review}
           >
             <Star className="w-4 h-4 mr-2" />
-            Leave a Review
+            {order.review ? 'Review Submitted' : 'Leave a Review'}
           </Button>
         )}
         
@@ -754,6 +787,78 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
               disabled={isDisputing || !disputeReason.trim()}
             >
               {isDisputing ? 'Submitting...' : 'Submit Dispute'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Review Dialog */}
+      <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Star className="w-5 h-5 text-emerald-600 fill-emerald-600" />
+              Rate your experience
+            </DialogTitle>
+            <DialogDescription>
+              Share your experience with the seller and the product to help other buyers.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 py-2">
+            <div className="flex items-center justify-center gap-2 py-4">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <button
+                  key={i}
+                  type="button"
+                  onClick={() => setReviewRating(i + 1)}
+                  className="focus:outline-none transition-all hover:scale-110"
+                >
+                  <Star
+                    className={`w-9 h-9 ${
+                      i < reviewRating
+                        ? 'fill-amber-400 text-amber-400'
+                        : 'text-gray-300 dark:text-gray-600'
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="review-comment">What did you think?</Label>
+              <Textarea
+                id="review-comment"
+                placeholder="Share more details about the product and seller service..."
+                value={reviewComment}
+                onChange={(e) => setReviewComment(e.target.value)}
+                rows={4}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="review-photos">Attach photos (Optional)</Label>
+              <Input
+                id="review-photos"
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => setReviewPhotos(Array.from(e.target.files || []))}
+                className="cursor-pointer"
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              className="bg-emerald-600 hover:bg-emerald-700 text-white"
+              onClick={handleSubmitReview}
+              disabled={isSubmittingReview}
+            >
+              {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
             </Button>
           </DialogFooter>
         </DialogContent>

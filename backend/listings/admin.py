@@ -20,6 +20,7 @@ class ListingAdmin(admin.ModelAdmin):
         'status', 'listing_type', 'is_published',
         'stock_quantity', 'track_inventory', 'is_verified', 'created_at'
     )
+    list_select_related = ('owner', 'category')
     list_filter = (
         'category', 'status', 'listing_type', 'condition',
         'is_published', 'track_inventory', 'is_verified', 'is_flagged',

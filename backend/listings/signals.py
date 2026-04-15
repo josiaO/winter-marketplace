@@ -28,10 +28,10 @@ def notify_seller_on_low_stock(sender, instance: Listing, **kwargs):
         return
 
     try:
-        from commerce.seller_notifications import notify_seller_low_stock
+        from commerce.tasks import send_seller_low_stock_notification
 
-        notify_seller_low_stock(
-            instance.owner,
+        send_seller_low_stock_notification.delay(
+            instance.owner_id,
             instance.title or 'Product',
             int(instance.stock_quantity),
             instance.pk,

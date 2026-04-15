@@ -10,6 +10,7 @@ class SellerStatsAdmin(admin.ModelAdmin):
         'total_orders', 'completed_orders', 'total_revenue', 'average_rating',
         'total_reviews', 'last_calculated_at',
     ]
+    list_select_related = ['seller']
     list_filter = ['currency']
     search_fields = ['seller__username', 'seller__email']
     readonly_fields = ['last_calculated_at']

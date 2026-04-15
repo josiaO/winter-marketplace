@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
-import { BarChart3, Clock, Package, Users } from 'lucide-react';
+import { BarChart3, Clock, Package, Users, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -13,6 +13,7 @@ import { canAccessSellerPortal } from '@/lib/auth-roles';
 import { useRouter } from 'next/navigation';
 import type { Order, Listing, PaginatedResponse } from '@/types/api';
 import { formatTZS, commerceOrderItemTitle, commerceOrderItemImage, orderTotalAmount } from '@/lib/helpers';
+import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 
 function monthStart(): Date {
@@ -142,12 +143,36 @@ export function SellerAnalyticsPage() {
 
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
-          <BarChart3 className="w-8 h-8 text-primary" />
-          Analytics
-        </h1>
-        <p className="text-muted-foreground mt-1">Numbers that help you decide what to do next.</p>
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-full shadow-sm bg-white shrink-0"
+            onClick={() => router.push(routes.sellerDashboard())}
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+              <BarChart3 className="w-8 h-8 text-primary" />
+              Analytics
+            </h1>
+            <p className="text-muted-foreground mt-1">Numbers that help you decide what to do next.</p>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          className="gap-2 shrink-0"
+          onClick={() => router.push(routes.sellerDashboard())}
+        >
+          <BarChart3 className="w-4 h-4 text-primary" />
+          Dashboard
+        </Button>
       </motion.div>
 
       <section className="space-y-3">

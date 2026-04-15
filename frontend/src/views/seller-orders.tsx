@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { routes } from '@/lib/routes';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
-import { Package, Clock, MapPin, Loader2, PackageOpen, ShieldAlert, Send, ImageOff } from 'lucide-react';
+import { Package, Clock, MapPin, Loader2, PackageOpen, ShieldAlert, Send, ImageOff, ChevronLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -162,9 +162,35 @@ export function SellerOrdersPage() {
 
   return (
     <div className="space-y-6">
-      <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Orders</h1>
-        <p className="text-muted-foreground mt-1">Your daily work table — tap an order to manage it.</p>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
+        <div className="flex items-center gap-4">
+          <Button
+            variant="outline"
+            size="icon"
+            className="rounded-full shadow-sm bg-white shrink-0"
+            onClick={() => router.push(routes.sellerDashboard())}
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </Button>
+          <div>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground">Orders</h1>
+            <p className="text-muted-foreground mt-1">
+              Your daily work table — tap an order to manage it.
+            </p>
+          </div>
+        </div>
+        <Button
+          variant="outline"
+          className="gap-2 shrink-0"
+          onClick={() => router.push(routes.sellerDashboard())}
+        >
+          <Package className="w-4 h-4" />
+          Dashboard
+        </Button>
       </motion.div>
 
       <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">

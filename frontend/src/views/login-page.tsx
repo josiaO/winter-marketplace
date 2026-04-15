@@ -24,13 +24,13 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const router = useRouter();
-  const { login, isLoading, isAuthenticated, user } = useAuthStore();
+  const { login, isLoading, isAuthenticated, user, isHydrated } = useAuthStore();
 
   useEffect(() => {
-    if (isAuthenticated) {
+    if (isHydrated && isAuthenticated) {
       router.replace(getPostLoginPath(user));
     }
-  }, [isAuthenticated, user, router]);
+  }, [isHydrated, isAuthenticated, user, router]);
 
   const {
     register,
@@ -42,9 +42,14 @@ export function LoginPage() {
     setError('');
     try {
       await login(data.email, data.password);
-      toast.success('Welcome back! Logged in successfully.');
+      // login() now returns immediately after token/user is set in store.
+      // fetchUser() continues in background.
+      
       const u = useAuthStore.getState().user;
-      router.replace(getPostLoginPath(u));
+      const target = getPostLoginPath(u);
+      
+      toast.success('Welcome back!');
+      router.replace(target);
     } catch (err: unknown) {
       let message = 'Login failed. Please check your credentials.';
       if (err instanceof Error) {

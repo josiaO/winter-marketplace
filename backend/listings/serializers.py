@@ -149,9 +149,12 @@ class ListingSerializer(serializers.ModelSerializer):
         request = self.context.get('request')
         if not request or not request.user.is_authenticated:
             return False
-        # Efficiency: rely on prefetching if it's there
+        # Efficiency: rely on attribute if it's there
         if hasattr(obj, '_is_liked'):
             return obj._is_liked
+        # Avoid DB query for each listing if likes are prefetched
+        if hasattr(obj, '_prefetched_objects_cache') and 'likes' in obj._prefetched_objects_cache:
+            return any(like.user_id == request.user.id for like in obj.likes.all())
         return obj.likes.filter(user=request.user).exists()
 
     def _owner_trust_block(self, obj):
@@ -159,6 +162,9 @@ class ListingSerializer(serializers.ModelSerializer):
         Trust app (TrustScore): ID + TIN + business license approved by admin => fully_verified.
         Used for marketplace badges and seller_profile on detail.
         """
+        if hasattr(obj, '_cached_trust_block'):
+            return obj._cached_trust_block
+            
         empty = {
             'id_verified': False,
             'tin_verified': False,
@@ -167,24 +173,28 @@ class ListingSerializer(serializers.ModelSerializer):
             'trust_score': None,
         }
         if not getattr(obj, 'owner_id', None):
+            obj._cached_trust_block = empty
             return empty
         try:
             from trust.models import TrustScore
-            try:
+            ts = None
+            if hasattr(obj.owner, 'trust_score'):
                 ts = obj.owner.trust_score
-            except ObjectDoesNotExist:
-                ts = TrustScore.objects.filter(user_id=obj.owner_id).first()
             if not ts:
+                obj._cached_trust_block = empty
                 return empty
             full = bool(ts.id_verified and ts.tin_verified and ts.license_verified)
-            return {
+            res = {
                 'id_verified': bool(ts.id_verified),
                 'tin_verified': bool(ts.tin_verified),
                 'license_verified': bool(ts.license_verified),
                 'fully_verified': full,
                 'trust_score': ts.score,
             }
+            obj._cached_trust_block = res
+            return res
         except Exception:
+            obj._cached_trust_block = empty
             return empty
 
     @extend_schema_field(serializers.DictField(child=serializers.CharField(), allow_null=True))

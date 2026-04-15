@@ -60,6 +60,17 @@ def auto_cancel_unpaid_order(self, order_id):
         logger.error(f"Error in auto_cancel_unpaid_order for {order_id}: {exc}")
         raise
 
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def send_seller_low_stock_notification(self, seller_id, listing_title, count, listing_id):
+    try:
+        from django.contrib.auth.models import User
+        seller = User.objects.get(id=seller_id)
+        from commerce.seller_notifications import notify_seller_low_stock
+        notify_seller_low_stock(seller, listing_title, count, listing_id)
+    except Exception as exc:
+        logger.exception('send_seller_low_stock_notification failed')
+        raise self.retry(exc=exc, countdown=60)
+
 # release_escrow_funds moved to transactions.tasks
 
 # Periodic Tasks for Celery Beat

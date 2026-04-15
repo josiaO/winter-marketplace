@@ -15,6 +15,9 @@ class FirebaseAuthentication(BaseAuthentication):
     """
     keyword = 'bearer'
 
+    def authenticate_header(self, request):
+        return 'Bearer realm="api"'
+
     def authenticate(self, request):
         auth_header = request.META.get('HTTP_AUTHORIZATION')
         if not auth_header:

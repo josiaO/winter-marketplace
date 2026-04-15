@@ -34,6 +34,151 @@ import { formatTZS } from '@/lib/helpers';
 import type { Category } from '@/types/api';
 import Link from 'next/link';
 
+type FieldType = 'text' | 'long_text' | 'integer' | 'decimal' | 'number' | 'select' | 'boolean' | 'date';
+interface NormalizedCategoryField {
+  id: number;
+  field_name: string;
+  field_label: string;
+  field_type: FieldType;
+  required: boolean;
+  choices: string[] | null;
+  unit?: string | null;
+  order: number;
+}
+
+function normalizeCategoryFields(raw: any[]): NormalizedCategoryField[] {
+  const rows: NormalizedCategoryField[] = [];
+  for (const f of raw || []) {
+    const field_name = String(f.field_name || f.key || '').trim();
+    if (!field_name) continue;
+    const field_label = String(f.field_label || f.name || field_name);
+    const field_type = (String(f.field_type || 'text') as FieldType) || 'text';
+    const choicesRaw = f.choices ?? f.options ?? null;
+    const choices = Array.isArray(choicesRaw) ? choicesRaw.map((c) => String(c)) : null;
+    rows.push({
+      id: Number(f.id),
+      field_name,
+      field_label,
+      field_type,
+      required: Boolean(f.required),
+      choices,
+      unit: typeof f.unit === 'string' ? f.unit : null,
+      order: Number(f.order || 0),
+    });
+  }
+  rows.sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || a.field_label.localeCompare(b.field_label));
+  return rows;
+}
+
+function DynamicSpecField({
+  field,
+  value,
+  onChange,
+}: {
+  field: NormalizedCategoryField;
+  value: unknown;
+  onChange: (val: unknown) => void;
+}) {
+  const label = (
+    <span className="flex items-center gap-1.5 text-sm font-medium">
+      {field.field_label}
+      {field.unit && <span className="text-xs text-muted-foreground">({field.unit})</span>}
+      {field.required && <span className="text-red-500 text-xs">*</span>}
+    </span>
+  );
+
+  if (field.field_type === 'boolean') {
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-xl border p-3">
+        {label}
+        <Switch
+          checked={Boolean(value)}
+          onCheckedChange={(checked) => onChange(checked)}
+        />
+      </div>
+    );
+  }
+
+  if (field.field_type === 'select' && field.choices) {
+    return (
+      <div className="space-y-1.5">
+        {label}
+        <select
+          className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          required={field.required}
+        >
+          <option value="">Select…</option>
+          {field.choices.map((opt) => (
+            <option key={opt} value={opt}>{opt}</option>
+          ))}
+        </select>
+      </div>
+    );
+  }
+
+  if (field.field_type === 'integer' || field.field_type === 'number') {
+    return (
+      <div className="space-y-1.5">
+        {label}
+        <Input
+          type="number"
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+          required={field.required}
+          placeholder={`Enter ${field.field_label.toLowerCase()}`}
+        />
+      </div>
+    );
+  }
+
+  if (field.field_type === 'decimal') {
+    return (
+      <div className="space-y-1.5">
+        {label}
+        <Input
+          type="number"
+          step="0.01"
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value === '' ? '' : parseFloat(e.target.value))}
+          required={field.required}
+          placeholder={`Enter ${field.field_label.toLowerCase()}`}
+        />
+      </div>
+    );
+  }
+
+  if (field.field_type === 'long_text') {
+    return (
+      <div className="space-y-1.5">
+        {label}
+        <textarea
+          className="w-full min-h-[80px] rounded-md border bg-background px-3 py-2 text-sm resize-none"
+          value={String(value ?? '')}
+          onChange={(e) => onChange(e.target.value)}
+          required={field.required}
+          placeholder={`Enter ${field.field_label.toLowerCase()}`}
+        />
+      </div>
+    );
+  }
+
+  // default: text / date
+  return (
+    <div className="space-y-1.5">
+      {label}
+      <Input
+        type={field.field_type === 'date' ? 'date' : 'text'}
+        value={String(value ?? '')}
+        onChange={(e) => onChange(e.target.value)}
+        required={field.required}
+        placeholder={`Enter ${field.field_label.toLowerCase()}`}
+      />
+    </div>
+  );
+}
+
 type PhotoRow = { id: string; file: File; preview: string };
 
 function flattenCategories(cats: Category[]): Array<{ id: number; name: string; depth: number }> {
@@ -61,7 +206,11 @@ function SortablePhoto({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.6 : 1 };
   return (
     <div ref={setNodeRef} style={style} className="relative aspect-square rounded-xl overflow-hidden bg-muted group border">
-      <img src={row.preview} alt="" className="w-full h-full object-contain" />
+      {row.file.type.startsWith('video/') ? (
+        <video src={row.preview} className="w-full h-full object-contain bg-black" controls={false} muted playsInline autoPlay loop />
+      ) : (
+        <img src={row.preview} alt="" className="w-full h-full object-contain" />
+      )}
       {index === 0 && (
         <span className="absolute top-1 left-1 text-[10px] font-semibold bg-primary text-primary-foreground px-1.5 py-0.5 rounded">
           Main
@@ -103,6 +252,7 @@ export function SellerListingCreatePage() {
   const [trackStock, setTrackStock] = useState(false);
   const [stockQty, setStockQty] = useState(1);
   const [lowStock, setLowStock] = useState(3);
+  const [allowBackorders, setAllowBackorders] = useState(false);
   const [description, setDescription] = useState('');
   const [location, setLocation] = useState('');
   const [deliveryFree, setDeliveryFree] = useState(true);
@@ -110,6 +260,9 @@ export function SellerListingCreatePage() {
   const [similarRange, setSimilarRange] = useState<{ min: number; max: number } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [catsLoading, setCatsLoading] = useState(true);
+  const [categoryFields, setCategoryFields] = useState<NormalizedCategoryField[]>([]);
+  const [specs, setSpecs] = useState<Record<string, unknown>>({});
+  const [fieldsLoading, setFieldsLoading] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const suggestTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -185,6 +338,31 @@ export function SellerListingCreatePage() {
     };
   }, [title]);
 
+  // Fetch dynamic category fields when categoryId changes
+  useEffect(() => {
+    if (!categoryId) {
+      setCategoryFields([]);
+      setSpecs({});
+      return;
+    }
+    setFieldsLoading(true);
+    void api.catalog.categoryFields(categoryId)
+      .then((raw) => {
+        const normalized = normalizeCategoryFields(raw as any);
+        setCategoryFields(normalized);
+        // Preserve any existing spec values for fields that still exist
+        setSpecs((prev) => {
+          const next: Record<string, unknown> = {};
+          for (const f of normalized) {
+            if (prev[f.field_name] !== undefined) next[f.field_name] = prev[f.field_name];
+          }
+          return next;
+        });
+      })
+      .catch(() => setCategoryFields([]))
+      .finally(() => setFieldsLoading(false));
+  }, [categoryId]);
+
   useEffect(() => {
     if (!categoryId || priceNum <= 0) {
       setSimilarRange(null);
@@ -209,9 +387,13 @@ export function SellerListingCreatePage() {
 
   const processFiles = useCallback(async (files: FileList | File[]) => {
     const newRows: PhotoRow[] = [];
-    const list = Array.from(files).filter((f) => f.type.startsWith('image/') && f.size <= 5 * 1024 * 1024);
+    const list = Array.from(files).filter((f) => {
+      if (f.type.startsWith('image/')) return f.size <= 5 * 1024 * 1024;
+      if (f.type.startsWith('video/')) return f.size <= 50 * 1024 * 1024 && (f.type === 'video/mp4' || f.type === 'video/webm');
+      return false;
+    });
     if (!list.length) {
-      toast.error('Please use images under 5MB.');
+      toast.error('Please use images under 5MB or videos (MP4/WEBM) under 50MB.');
       return;
     }
     for (const file of list) {
@@ -290,10 +472,13 @@ export function SellerListingCreatePage() {
         track_inventory: trackStock,
         stock_quantity: trackStock ? stockQty : undefined,
         low_stock_threshold: trackStock ? lowStock : undefined,
+        allow_backorders: allowBackorders,
+        ...(Object.keys(specs).length > 0 ? { specs } : {}),
         images: files,
       });
-      toast.success(asDraft || !isVerified ? 'Draft saved.' : 'Listing published!');
-      router.push(routes.sellerListings());
+      toast.success(asDraft || !isVerified ? '✅ Listing saved as draft! Complete Step 3 to go live.' : '🎉 Listing published!');
+      // Redirect to dashboard so onboarding progress refreshes and Step 3 unlocks immediately
+      router.push(routes.sellerDashboard());
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to save listing.';
       toast.error(msg);
@@ -342,7 +527,7 @@ export function SellerListingCreatePage() {
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg p-3">
-                Tip: Good lighting and multiple angles sell faster.
+                Tip: Good lighting and multiple angles sell faster. You can also include up to 1 video (MP4/WebM).
               </p>
               <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
                 <SortableContext items={photos.map((p) => p.id)} strategy={rectSortingStrategy}>
@@ -362,12 +547,12 @@ export function SellerListingCreatePage() {
               >
                 <ImagePlus className="w-10 h-10" />
                 <span className="text-sm font-medium text-foreground">Tap to add photos</span>
-                <span className="text-xs">PNG, JPG, WEBP · max 5MB each</span>
+                <span className="text-xs">PNG, JPG, WEBP (max 5MB) · MP4, WEBM (max 50MB)</span>
               </button>
               <input
                 ref={fileRef}
                 type="file"
-                accept="image/*"
+                accept="image/*,video/mp4,video/webm"
                 multiple
                 className="hidden"
                 onChange={(e) => {
@@ -450,6 +635,31 @@ export function SellerListingCreatePage() {
                   </select>
                 )}
               </div>
+
+              {/* ── Dynamic Category Fields ──────────────────────────────── */}
+              {fieldsLoading && (
+                <div className="space-y-3">
+                  <Skeleton className="h-4 w-36" />
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              )}
+              {!fieldsLoading && categoryFields.length > 0 && (
+                <div className="space-y-3 rounded-xl border border-primary/20 bg-primary/5 dark:bg-primary/10 p-4">
+                  <p className="text-xs font-bold uppercase tracking-wider text-primary">Category Details</p>
+                  {categoryFields.map((field) => (
+                    <DynamicSpecField
+                      key={field.id}
+                      field={field}
+                      value={specs[field.field_name]}
+                      onChange={(val) =>
+                        setSpecs((prev) => ({ ...prev, [field.field_name]: val }))
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+
               <div className="space-y-2">
                 <Label>Price (TZS)</Label>
                 <Input
@@ -581,6 +791,23 @@ export function SellerListingCreatePage() {
                   </div>
                 </div>
               )}
+              {trackStock && (
+                <div className="flex items-start gap-3 pt-1">
+                  <Checkbox
+                    id="backorders"
+                    checked={allowBackorders}
+                    onCheckedChange={(c) => setAllowBackorders(c === true)}
+                  />
+                  <div>
+                    <Label htmlFor="backorders" className="text-sm font-medium">
+                      Allow backorders
+                    </Label>
+                    <p className="text-[11px] text-muted-foreground">
+                      Customers can purchase even if out of stock.
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="space-y-2">
                 <Label>Description (optional)</Label>
                 <Textarea rows={4} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} />
@@ -628,7 +855,11 @@ export function SellerListingCreatePage() {
               <div className="rounded-2xl border bg-card shadow-sm overflow-hidden max-w-sm mx-auto">
                 <div className="aspect-square bg-muted relative">
                   {previewMain ? (
-                    <img src={previewMain} alt="" className="w-full h-full object-contain" />
+                    photos[0]?.file.type.startsWith('video/') ? (
+                      <video src={previewMain} className="w-full h-full object-contain bg-black" muted playsInline />
+                    ) : (
+                      <img src={previewMain} alt="" className="w-full h-full object-contain" />
+                    )
                   ) : (
                     <Upload className="w-10 h-10 m-auto text-muted-foreground absolute inset-0 m-auto" />
                   )}

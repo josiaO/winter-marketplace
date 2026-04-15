@@ -1323,6 +1323,14 @@ class ApiClient {
     toggleActiveStatus: (id: number | string): Promise<unknown> =>
       this.post(`/accounts/users/${id}/toggle_active_status/`),
 
+    /** PATCH /accounts/users/:id/ (admin) */
+    updateUser: (id: number | string, payload: Partial<User>): Promise<User> =>
+      this.patch(`/accounts/users/${id}/`, payload),
+
+    /** DELETE /accounts/users/:id/ (admin) */
+    deleteUser: (id: number | string): Promise<void> =>
+      this.delete(`/accounts/users/${id}/`),
+
     /** GET /accounts/users/stats/ (admin) */
     userStats: (): Promise<unknown> =>
       this.get('/accounts/users/stats/'),

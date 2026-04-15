@@ -145,12 +145,26 @@ export function AdminVerificationsPage() {
   return (
     <div className="min-h-[80vh] px-4 py-8 bg-[#f9fafb]">
       <div className="max-w-7xl mx-auto space-y-8">
-        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
-              <Shield className="w-8 h-8 text-primary" /> Seller Control Center
-            </h1>
-            <p className="text-muted-foreground mt-1.5 text-lg">Manage multi-tier verification and marketplace security.</p>
+        <motion.div
+           initial={{ opacity: 0, y: 10 }}
+           animate={{ opacity: 1, y: 0 }}
+           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+        >
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-sm bg-white shrink-0"
+              onClick={() => router.back()}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-gray-900 flex items-center gap-3">
+                <Shield className="w-8 h-8 text-primary" /> Seller Control Center
+              </h1>
+              <p className="text-muted-foreground mt-1.5 text-lg">Manage multi-tier verification and marketplace security.</p>
+            </div>
           </div>
           <div className="flex items-center gap-3">
              <Button variant="outline" className="gap-2 shrink-0 h-11" onClick={() => router.push(routes.adminDashboard())}>

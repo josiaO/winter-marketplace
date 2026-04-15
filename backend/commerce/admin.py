@@ -28,6 +28,7 @@ class CartItemInline(admin.TabularInline):
 @admin.register(Cart)
 class CartAdmin(admin.ModelAdmin):
     list_display = ('user', 'item_count', 'total', 'created_at')
+    list_select_related = ('user',)
     search_fields = ('user__username', 'user__email')
     readonly_fields = ('total', 'created_at', 'updated_at')
     inlines = [CartItemInline]
@@ -55,6 +56,7 @@ class CartAdmin(admin.ModelAdmin):
 @admin.register(CartItem)
 class CartItemAdmin(admin.ModelAdmin):
     list_display = ('cart', 'listing', 'quantity', 'price_at_time', 'get_subtotal')
+    list_select_related = ('cart', 'listing')
     search_fields = ('listing__title', 'cart__user__username')
     list_filter = ('created_at',)
     
@@ -85,6 +87,7 @@ class OrderAdmin(admin.ModelAdmin):
         'id', 'buyer', 'seller', 'status', 'total_amount', 'currency',
         'created_at', 'completed_at'
     )
+    list_select_related = ('buyer', 'seller')
     list_filter = ('status', 'currency', 'created_at')
     search_fields = (
         'buyer__username', 'seller__username', 'tracking_number',
@@ -229,6 +232,7 @@ class OrderAdmin(admin.ModelAdmin):
 @admin.register(OrderItem)
 class OrderItemAdmin(admin.ModelAdmin):
     list_display = ('order', 'listing', 'quantity', 'price_at_time', 'get_subtotal')
+    list_select_related = ('order', 'listing')
     search_fields = ('listing__title', 'order__id')
     list_filter = ('created_at',)
     
@@ -248,6 +252,7 @@ class DeliveryAdmin(admin.ModelAdmin):
         'order', 'method', 'status', 'tracking_number',
         'carrier', 'shipped_at', 'delivered_at'
     )
+    list_select_related = ('order',)
     list_filter = ('method', 'status', 'created_at')
     search_fields = (
         'order__id', 'tracking_number', 'recipient_name',
@@ -318,6 +323,7 @@ class StockReservationAdmin(admin.ModelAdmin):
         'id', 'listing', 'order', 'quantity', 'status',
         'expires_at', 'is_expired_display'
     )
+    list_select_related = ('listing', 'order')
     list_filter = ('status', 'created_at', 'expires_at')
     search_fields = ('listing__title', 'order__id')
     readonly_fields = ('is_expired_display', 'created_at', 'updated_at')
@@ -355,6 +361,7 @@ class OrderAuditLogAdmin(admin.ModelAdmin):
         'correlation_id',
         'created_at',
     )
+    list_select_related = ('order', 'actor')
     list_filter = ('action', 'created_at')
     search_fields = ('order__id', 'action', 'correlation_id')
     readonly_fields = (
@@ -383,6 +390,7 @@ class CommissionRuleAdmin(admin.ModelAdmin):
         'name', 'rule_type', 'get_commission_display', 'category', 
         'priority', 'is_active', 'created_at'
     )
+    list_select_related = ('category',)
     list_filter = ('rule_type', 'is_active', 'category', 'created_at')
     search_fields = ('name', 'category__name')
     readonly_fields = ('created_at', 'updated_at')

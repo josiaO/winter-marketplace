@@ -281,12 +281,10 @@ class BaseListing(BaseModel):
                 # Has a store - likely a marketplace item
                 is_marketplace_listing = True
             else:
-                # Check if MarketplaceItem exists for this listing ID
+                # Use hasattr which utilizes select_related if available, avoiding N+1
                 try:
-                    from marketplace.models import MarketplaceItem
-                    if MarketplaceItem.objects.filter(pk=self.pk).exists():
-                        is_marketplace_listing = True
-                except (ImportError, Exception):
+                    is_marketplace_listing = hasattr(self, 'marketplaceitem')
+                except Exception:
                     pass
             
             # Check seller profile status

@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { routes } from '@/lib/routes';
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import {
   Users,
@@ -13,9 +13,13 @@ import {
   UserCog,
   Ban,
   Store,
-  MoreHorizontal,
   ChevronLeft,
   ChevronRight,
+  Edit,
+  Trash2,
+  AlertTriangle,
+  CheckCircle,
+  MoreHorizontal,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -44,6 +48,25 @@ import { useAuthStore } from '@/store';
 import { api } from '@/lib/api-client';
 import { formatDate, getInitials, getRelativeTime } from '@/lib/helpers';
 import { EmptyState } from '@/components/smartdalali/empty-state';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
 import type { User, PaginatedResponse } from '@/types/api';
 
 const PAGE_SIZE = 20;
@@ -85,6 +108,23 @@ export function AdminUsersPage() {
   const [roleFilter, setRoleFilter] = useState('all');
   const [page, setPage] = useState(1);
   const [togglingId, setTogglingId] = useState<number | null>(null);
+
+  // Deletion state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState<User | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // Edit state
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [userToEdit, setUserToEdit] = useState<User | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editForm, setEditForm] = useState({
+    first_name: '',
+    last_name: '',
+    email: '',
+    role: '',
+    is_active: true,
+  });
 
   // ── Data fetching ──────────────────────────────────────────────────────
   const fetchUsers = useCallback(async () => {
@@ -139,13 +179,58 @@ export function AdminUsersPage() {
     }
   };
 
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return;
+    setIsDeleting(true);
+    try {
+      await api.accounts.deleteUser(userToDelete.id);
+      toast.success('User deleted successfully');
+      fetchUsers();
+      setIsDeleteDialogOpen(false);
+    } catch {
+      toast.error('Failed to delete user');
+    } finally {
+      setIsDeleting(false);
+      setUserToDelete(null);
+    }
+  };
+
+  const handleEditUser = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!userToEdit) return;
+    setIsUpdating(true);
+    try {
+      await api.accounts.updateUser(userToEdit.id, editForm);
+      toast.success('User updated successfully');
+      fetchUsers();
+      setIsEditDialogOpen(false);
+    } catch {
+      toast.error('Failed to update user');
+    } finally {
+      setIsUpdating(false);
+      setUserToEdit(null);
+    }
+  };
+
+  const openEditModal = (u: User) => {
+    setUserToEdit(u);
+    setEditForm({
+      first_name: u.first_name || '',
+      last_name: u.last_name || '',
+      email: u.email || '',
+      role: u.role || 'user',
+      is_active: u.is_active,
+    });
+    setIsEditDialogOpen(true);
+  };
+
   // ── Guard ──────────────────────────────────────────────────────────────
   if (!isAuthenticated || !user || user.role !== 'admin') return null;
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
   return (
-    <div className="min-h-[80vh] px-4 py-6 sm:py-8">
+    <div key="admin-users-page" className="min-h-[80vh] px-4 py-6 sm:py-8">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <motion.div
@@ -153,14 +238,24 @@ export function AdminUsersPage() {
           animate={{ opacity: 1, y: 0 }}
           className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
         >
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
-              <Users className="w-7 h-7 text-emerald-600" />
-              User Management
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Manage all platform users, sellers, and admins
-            </p>
+          <div className="flex items-center gap-4">
+            <Button
+              variant="outline"
+              size="icon"
+              className="rounded-full shadow-sm bg-white"
+              onClick={() => router.back()}
+            >
+              <ChevronLeft className="w-5 h-5" />
+            </Button>
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground flex items-center gap-2">
+                <Users className="w-7 h-7 text-emerald-600" />
+                User Management
+              </h1>
+              <p className="text-muted-foreground mt-1 text-sm sm:text-base">
+                Manage all platform users, sellers, and admins
+              </p>
+            </div>
           </div>
           <Button
             variant="outline"
@@ -292,16 +387,34 @@ export function AdminUsersPage() {
                                       <DropdownMenuItem
                                         onClick={() => handleToggleActiveStatus(u.id)}
                                         disabled={togglingId === u.id || u.role === 'admin'}
-                                        className={u.is_active ? 'text-red-600 focus:text-red-600' : ''}
                                       >
                                         {togglingId === u.id ? (
                                           <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                         ) : u.is_active ? (
                                           <Ban className="w-4 h-4 mr-2" />
                                         ) : (
-                                          <UserCog className="w-4 h-4 mr-2" />
+                                          <CheckCircle className="w-4 h-4 mr-2" />
                                         )}
                                         {u.is_active ? 'Deactivate User' : 'Activate User'}
+                                      </DropdownMenuItem>
+                                      <DropdownMenuSeparator />
+                                      <DropdownMenuItem
+                                        onClick={() => openEditModal(u)}
+                                        disabled={u.role === 'admin' && u.id !== user.id}
+                                      >
+                                        <Edit className="w-4 h-4 mr-2" />
+                                        Edit User
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem
+                                        className="text-destructive focus:text-destructive"
+                                        onClick={() => {
+                                          setUserToDelete(u);
+                                          setIsDeleteDialogOpen(true);
+                                        }}
+                                        disabled={u.id === user.id || u.role === 'admin'}
+                                      >
+                                        <Trash2 className="w-4 h-4 mr-2" />
+                                        Delete User
                                       </DropdownMenuItem>
                                     </DropdownMenuContent>
                                   </DropdownMenu>
@@ -351,16 +464,33 @@ export function AdminUsersPage() {
                                   <DropdownMenuItem
                                     onClick={() => handleToggleActiveStatus(u.id)}
                                     disabled={togglingId === u.id || u.role === 'admin'}
-                                    className={u.is_active ? 'text-red-600 focus:text-red-600' : ''}
                                   >
                                     {togglingId === u.id ? (
                                       <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                                     ) : u.is_active ? (
                                       <Ban className="w-4 h-4 mr-2" />
                                     ) : (
-                                      <UserCog className="w-4 h-4 mr-2" />
+                                      <CheckCircle className="w-4 h-4 mr-2" />
                                     )}
                                     {u.is_active ? 'Deactivate' : 'Activate'}
+                                  </DropdownMenuItem>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem
+                                    onClick={() => openEditModal(u)}
+                                  >
+                                    <Edit className="w-4 h-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem
+                                    className="text-destructive focus:text-destructive"
+                                    onClick={() => {
+                                      setUserToDelete(u);
+                                      setIsDeleteDialogOpen(true);
+                                    }}
+                                    disabled={u.id === user.id}
+                                  >
+                                    <Trash2 className="w-4 h-4 mr-2" />
+                                    Delete
                                   </DropdownMenuItem>
                                 </DropdownMenuContent>
                               </DropdownMenu>
@@ -415,6 +545,109 @@ export function AdminUsersPage() {
             </CardContent>
           </Card>
         </motion.div>
+
+        {/* Delete Confirmation Dialog */}
+        <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                <AlertTriangle className="w-5 h-5" />
+                Delete User?
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                Are you sure you want to delete <strong>{userToDelete?.username || userToDelete?.email}</strong>? This action is permanent and cannot be undone. All user data, listings, and history will be potentially impacted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                disabled={isDeleting}
+                onClick={(e) => {
+                  e.preventDefault();
+                  handleDeleteUser();
+                }}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Delete User"}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        {/* Edit User Dialog */}
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle>Edit User Details</DialogTitle>
+              <DialogDescription>
+                Update profile information and platform permissions.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleEditUser} className="space-y-4 py-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="first_name">First Name</Label>
+                  <Input
+                    id="first_name"
+                    value={editForm.first_name}
+                    onChange={(e) => setEditForm({ ...editForm, first_name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="last_name">Last Name</Label>
+                  <Input
+                    id="last_name"
+                    value={editForm.last_name}
+                    onChange={(e) => setEditForm({ ...editForm, last_name: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email Address</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="role">Platform Role</Label>
+                <select
+                  id="role"
+                  className="w-full h-10 px-3 rounded-md border border-input bg-background"
+                  value={editForm.role}
+                  onChange={(e) => setEditForm({ ...editForm, role: e.target.value })}
+                >
+                  <option value="user">Buyer (Regular User)</option>
+                  <option value="seller">Seller</option>
+                  <option value="admin">Administrator</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="is_active"
+                  checked={editForm.is_active}
+                  onChange={(e) => setEditForm({ ...editForm, is_active: e.target.checked })}
+                  className="w-4 h-4 rounded border-gray-300"
+                />
+                <Label htmlFor="is_active">User account is active</Label>
+              </div>
+
+              <DialogFooter className="pt-4">
+                <Button type="button" variant="ghost" onClick={() => setIsEditDialogOpen(false)} disabled={isUpdating}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isUpdating} className="gap-2">
+                  {isUpdating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+                  Save Changes
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

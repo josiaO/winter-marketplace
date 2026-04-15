@@ -239,11 +239,23 @@ export function getInitials(name: string): string {
  */
 export function normalizeListing(raw: Record<string, unknown>): Listing {
   const l = raw as any;
-  const images: ListingImage[] = Array.isArray(l.images) && l.images.length > 0
-    ? l.images
-    : l.image
-      ? [{ id: '__img', url: l.image, altText: '', sortOrder: 0, isPrimary: true }]
-      : [];
+  let images: ListingImage[] = [];
+  
+  if (Array.isArray(l.images) && l.images.length > 0) {
+    images = l.images;
+  } else if (Array.isArray(l.media) && l.media.length > 0) {
+    images = l.media.map((m: any) => ({
+      id: m.id,
+      url: m.file || m.file_url,
+      image: m.file || m.file_url, // To support components resolving `.image`
+      media_type: m.media_type,
+      altText: m.caption || '',
+      sortOrder: m.order || 0,
+      isPrimary: m.order === 0 || m.is_primary,
+    }));
+  } else if (l.image) {
+    images = [{ id: '__img', url: l.image, image: l.image, altText: '', sortOrder: 0, isPrimary: true }];
+  }
 
   const seller = l.seller || {};
   return {
