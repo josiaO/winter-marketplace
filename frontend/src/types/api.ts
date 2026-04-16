@@ -80,7 +80,20 @@ export interface SellerProfile {
   is_verified: boolean;
   payout_method: string | null;
   payout_details: Record<string, unknown> | null;
+  store_name?: string;
+  store_slug?: string;
+  store_logo?: string | null;
+  store_banner?: string | null;
   store: Store | null;
+  store_description?: string | null;
+  store_location?: string | null;
+  business_email?: string | null;
+  business_phone?: string | null;
+  business_address?: string | null;
+  notification_orders?: boolean;
+  notification_messages?: boolean;
+  notification_reviews?: boolean;
+  is_business_verified?: boolean;
 }
 
 export interface LoginPayload {
@@ -95,7 +108,7 @@ export interface RegisterPayload {
   confirm_password?: string;
   first_name?: string;
   last_name?: string;
-  phone?: string;
+  phone_number?: string;
 }
 
 export interface PasswordResetPayload {
@@ -246,14 +259,24 @@ export interface Listing {
   attributes?: Record<string, unknown>;
   specs?: Record<string, unknown> | null;
   attribute_values?: ListingAttributeValueRow[];
-  delivery_is_free?: boolean;
   delivery_fee?: string | number | null;
+  delivery_is_free?: boolean;
   created_at: string;
   updated_at: string;
   seller_trust?: SellerTrustBlock;
   price_fairness?: PriceFairness;
   seller_profile?: Record<string, unknown>;
   seller_status_message?: string | null;
+  // Dynamic fields from API
+  is_liked?: boolean;
+  track_inventory?: boolean;
+  low_stock_threshold?: number | null;
+  allow_backorders?: boolean;
+  address?: string | null;
+  notification_orders?: boolean;
+  notification_messages?: boolean;
+  notification_reviews?: boolean;
+  is_business_verified?: boolean;
 }
 
 export interface CreateListingPayload {
@@ -404,9 +427,9 @@ export type OrderStatus =
   | 'refunded'
   | 'disputed';
 
-export type ShippingMethod = 'standard' | 'express' | 'pickup';
-export type PaymentMethod = 'mobile_money' | 'bank_transfer' | 'card' | 'cash_on_delivery';
-export type PaymentChannel = 'tigo_pesa' | 'mpesa' | 'airtel_money' | 'halopesa' | 'azampesa' | 'bank';
+export type ShippingMethod = 'standard' | 'express' | 'pickup' | 'local_delivery';
+export type PaymentMethod = 'mobile_money' | 'bank_transfer' | 'card' | 'cash_on_delivery' | 'azam_pay';
+export type PaymentChannel = 'tigo_pesa' | 'mpesa' | 'airtel_money' | 'halopesa' | 'azampesa' | 'azam_pay' | 'bank' | 'selcom';
 
 /** Matches Django `OrderItemSerializer`; legacy flat fields optional. */
 export interface OrderItem {
@@ -485,6 +508,10 @@ export interface Order {
   escrow_transaction: Transaction | null;
   payment_url: string | null;
   transaction_reference: string | null;
+  shipment_video: string | null;
+  shipment_images_count: number;
+  evidence: any[];
+  review?: Review | null;
   created_at: string;
   updated_at: string;
 }
@@ -853,11 +880,15 @@ export interface PayLink {
   payment_url: string | null;
   expires_at: string;
   created_at: string;
+  token?: string;
+  is_active?: boolean;
+  listing_title?: string;
 }
 
 export interface CreatePayLinkPayload {
-  amount: number;
-  description: string;
+  amount?: number;
+  description?: string;
+  listing_id?: number;
   expires_in?: number; // hours
 }
 
@@ -973,4 +1004,9 @@ export interface CreateSupportRequestPayload {
 export interface UpdateSupportRequestPayload {
   status?: 'open' | 'in_progress' | 'resolved' | 'closed';
   admin_notes?: string;
+}
+export interface UpdateSupportRequestPayload {
+  status?: string;
+  admin_notes?: string;
+  priority?: string;
 }

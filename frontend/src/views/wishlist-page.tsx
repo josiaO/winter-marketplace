@@ -78,8 +78,8 @@ export function WishlistPage() {
     );
     setItems(
       settled
-        .filter((r): r is PromiseFulfilledResult<WishlistCardItem> => r.status === 'fulfilled')
-        .map((r) => r.value),
+        .map((r) => (r.status === 'fulfilled' ? (r as PromiseFulfilledResult<WishlistCardItem>).value : null))
+        .filter((v): v is WishlistCardItem => v !== null),
     );
     setNotifyMap(getLocalWishlistNotifyMap());
   }, []);
@@ -120,7 +120,7 @@ export function WishlistPage() {
               savedAt: local?.savedAt,
               priceSnapshot: local?.priceSnapshot,
               isLocal: false,
-            } satisfies WishlistCardItem;
+            } as WishlistCardItem;
           })
           .filter((item): item is WishlistCardItem => item !== null),
       );

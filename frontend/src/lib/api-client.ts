@@ -113,33 +113,19 @@ class ApiClient {
   // ---------------------------------------------------------------------------
 
   private loadTokens(): void {
-    try {
-      this.accessToken = localStorage.getItem(TOKEN_ACCESS_KEY);
-      this.refreshToken = localStorage.getItem(TOKEN_REFRESH_KEY);
-    } catch {
-      this.accessToken = null;
-      this.refreshToken = null;
-    }
+    // Tokens are now in HttpOnly cookies and managed by the proxy
+    this.accessToken = null;
+    this.refreshToken = null;
   }
 
   private saveTokens(access: string, refresh: string): void {
-    try {
-      localStorage.setItem(TOKEN_ACCESS_KEY, access);
-      localStorage.setItem(TOKEN_REFRESH_KEY, refresh);
-    } catch {
-      // Storage may be unavailable
-    }
+    // We keep them in memory for current session if needed, 
+    // but the source of truth is the HttpOnly cookie.
     this.accessToken = access;
     this.refreshToken = refresh;
   }
 
   private clearTokens(): void {
-    try {
-      localStorage.removeItem(TOKEN_ACCESS_KEY);
-      localStorage.removeItem(TOKEN_REFRESH_KEY);
-    } catch {
-      // Storage may be unavailable
-    }
     this.accessToken = null;
     this.refreshToken = null;
   }
@@ -155,6 +141,13 @@ class ApiClient {
 
   public isAuthenticated(): boolean {
     return !!this.accessToken;
+  }
+
+  /**
+   * Helper to check if an error is a 401 Unauthorized error.
+   */
+  public isUnauthorized(error: unknown): boolean {
+    return error instanceof ApiClientError && error.status === 401;
   }
 
   private processQueue(error: unknown, token: string | null = null): void {
@@ -220,7 +213,10 @@ class ApiClient {
       headers.set('Content-Type', 'application/json');
     }
 
-    if (this.accessToken && !skipAuth) {
+    // In the browser, cookies are sent automatically.
+    // We only set Authorization header if we have a token in memory (e.g. for non-browser environments or initial load)
+    // and if we are NOT in a browser-like environment where HttpOnly cookies handle it.
+    if (this.accessToken && !skipAuth && typeof window === 'undefined') {
       headers.set('Authorization', `Bearer ${this.accessToken}`);
     }
 
@@ -421,11 +417,14 @@ class ApiClient {
     ): Promise<{ message: string; expires_in_minutes?: number }> =>
       this.post('/accounts/otp/request/', payload, { skipAuth: true }),
 
-    /** POST /accounts/otp/verify/ */
+    /** GET /accounts/otp/verify/ */
     verifyOtp: (
       payload: OtpVerifyPayload & { purpose?: string; email?: string; user_id?: number }
     ): Promise<{ message: string; verified?: boolean; reset_token?: string }> =>
       this.post('/accounts/otp/verify/', payload, { skipAuth: true }),
+
+    /** GET /accounts/auth/ws-ticket/ */
+    fetchWsTicket: (): Promise<{ ticket: string }> => this.get('/accounts/auth/ws-ticket/'),
   };
 
   // ===========================================================================
@@ -465,7 +464,7 @@ class ApiClient {
     },
 
     /** PATCH /listings/:id/ (multipart supported: media[]) */
-    update: (id: number | string, payload: UpdateListingPayload): Promise<Listing> => {
+    update: (id: number | string, payload: Partial<UpdateListingPayload>): Promise<Listing> => {
       const anyPayload = payload as unknown as Record<string, unknown>;
       const media = (anyPayload.media as File[] | undefined) || (anyPayload.images as File[] | undefined);
       if (media && media.length > 0) {
@@ -594,6 +593,10 @@ class ApiClient {
     cartRemoveItem: (payload: { item_id: number | string }): Promise<Cart> =>
       this.post('/commerce/cart/remove_item/', payload),
 
+    /** POST /commerce/cart/batch_add/ */
+    cartBatchAdd: (payload: { items: { listing_id: number | string; quantity: number }[] }): Promise<Cart> =>
+      this.post('/commerce/cart/batch_add/', payload),
+
     /**
      * Set cart line to an absolute quantity (backend has no PATCH cart-item route).
      * remove_item + add_item preserves server-side price_at_time rules.
@@ -605,7 +608,7 @@ class ApiClient {
     ): Promise<Cart> => {
       await this.post('/commerce/cart/remove_item/', { item_id: itemId });
       if (newQuantity < 1) {
-        return this.cart();
+        return this.commerce.cart();
       }
       return this.post('/commerce/cart/add_item/', {
         listing_id: listingId,

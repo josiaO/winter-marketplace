@@ -67,12 +67,12 @@ const PAYMENT_METHODS: Array<{
   djangoChannel?: PaymentChannel;
 }> = [
   {
-    value: 'm_pesa',
+    value: 'mpesa',
     label: 'M-Pesa',
     description: 'Mobile money',
     icon: Smartphone,
     djangoMethod: 'mobile_money',
-    djangoChannel: 'm_pesa',
+    djangoChannel: 'mpesa',
   },
   {
     value: 'tigo_pesa',
@@ -113,7 +113,7 @@ function getPaymentEnums(value: string): {
   const found = PAYMENT_METHODS.find((m) => m.value === value);
   return found
     ? { method: found.djangoMethod, channel: found.djangoChannel }
-    : { method: 'mobile_money', channel: 'm_pesa' };
+    : { method: 'mobile_money', channel: 'mpesa' };
 }
 
 // ---------------------------------------------------------------------------
@@ -146,7 +146,7 @@ export function CheckoutPage() {
   const [address, setAddress] = useState(user?.profile?.address || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [shippingMethod, setShippingMethod] = useState('standard');
-  const [paymentMethod, setPaymentMethod] = useState('m_pesa');
+  const [paymentMethod, setPaymentMethod] = useState('mpesa');
   const [termsAccepted, setTermsAccepted] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -540,11 +540,11 @@ export function CheckoutPage() {
                 {items.map((item) => (
                   <div key={item.id} className="flex gap-3">
                     <div className="relative w-12 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
-                      {item.listing.images?.[0]?.url || item.listing.image ? (
+                      {((item.listing.images?.[0] as any)?.image) || (item.listing as any).image ? (
                         <img
                           src={
-                            item.listing.images?.[0]?.url ||
-                            item.listing.image ||
+                            ((item.listing.images?.[0] as any)?.image) ||
+                            (item.listing as any).image ||
                             ''
                           }
                           alt={item.listing.title}

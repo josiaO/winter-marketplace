@@ -14,6 +14,7 @@ auth_patterns = [
     path('auth/token/refresh/', views.MyTokenRefreshView.as_view(), name='token_refresh'),
     path('auth/logout/', views.auth_logout, name='auth_logout'),
     path('auth/register/', views.register, name='register'),
+    path('auth/ws-ticket/', views.issue_ws_ticket, name='ws_ticket'),
     path('auth/signup/', views.signup, name='signup'),
     path('auth/routes/', views.get_user_routes, name='get_user_routes'),
     path('auth/<str:username>/activate/', views.activate, name='activate'),

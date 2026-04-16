@@ -133,6 +133,7 @@ class OrderSerializer(serializers.ModelSerializer):
     sellerId = serializers.IntegerField(source='seller.id', read_only=True)
     listingId = serializers.SerializerMethodField()
     status = serializers.CharField() # Ensure status is returned as string
+    review = serializers.SerializerMethodField()
     
     class Meta:
         model = Order
@@ -150,6 +151,7 @@ class OrderSerializer(serializers.ModelSerializer):
             'createdAt', 'updatedAt', 'shippedAt', 'deliveredAt', 'arrivedAt',
             'buyerId', 'sellerId', 'listingId',
             'shipment_video', 'shipment_images_count', 'evidence',
+            'review',
             'created_at', 'updated_at'
         ]
         read_only_fields = [
@@ -330,6 +332,16 @@ class OrderSerializer(serializers.ModelSerializer):
             'admin_notes': dispute.reason, # Using reason as info
             'created_at': dispute.created_at,
         }
+
+    @extend_schema_field(serializers.DictField(allow_null=True))
+    def get_review(self, obj):
+        """Get the linked review for this order."""
+        review = getattr(obj, 'review', None)
+        if not review:
+            return None
+            
+        from trust.serializers import ReviewSerializer
+        return ReviewSerializer(review, context=self.context).data
 
 
 # Note: EscrowTransactionSerializer and PayoutSerializer have been removed 

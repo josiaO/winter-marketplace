@@ -132,6 +132,7 @@ function SupportRequestCard({ request }: { request: SupportRequest }) {
                       href={attachment}
                       target="_blank"
                       rel="noopener noreferrer"
+                      rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-xs text-primary hover:underline px-2 py-1 rounded-md bg-primary/5"
                     >
                       <FileText className="w-3 h-3" />

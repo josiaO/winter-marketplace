@@ -37,10 +37,18 @@ class Profile(models.Model):
 # Create or update Profile when User is created or saved
 @receiver(post_save, sender=User)
 def create_or_update_profile(sender, instance, created, **kwargs):
+    """
+    Ensure a Profile exists and is saved when a User is created or updated.
+    Uses get_or_create to harden against missing profiles for existing users.
+    """
     if created:
-        Profile.objects.create(user=instance)
-    # If the User is updated, ensure the Profile is also saved
-    instance.profile.save()
+        Profile.objects.get_or_create(user=instance)
+    else:
+        # For updates, gracefully handle users that might be missing a profile
+        if not hasattr(instance, 'profile'):
+            Profile.objects.get_or_create(user=instance)
+        else:
+            instance.profile.save()
 
 # post_save.connect(create_or_update_profile, sender=User)
 

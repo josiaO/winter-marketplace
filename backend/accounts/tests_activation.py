@@ -6,7 +6,11 @@ from django.test import override_settings
 
 
 class RegistrationActivationTest(APITestCase):
-    @override_settings(EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend')
+    @override_settings(
+        EMAIL_BACKEND='django.core.mail.backends.locmem.EmailBackend',
+        CELERY_TASK_ALWAYS_EAGER=True,
+        CELERY_TASK_EAGER_PROPAGATES=True,
+    )
     def test_register_sends_activation_and_activate_via_api(self):
         url = '/api/v1/accounts/auth/register/'
         payload = {
@@ -20,14 +24,15 @@ class RegistrationActivationTest(APITestCase):
         self.assertEqual(resp.status_code, 201)
         self.assertIn('message', resp.data)
 
-        # Verify user exists and is active (auto-activation enabled)
+        # Verify user exists and is inactive (requires OTP/Activation)
         user = User.objects.get(username='newuser')
-        self.assertTrue(user.is_active)
+        self.assertFalse(user.is_active)
 
-        # Ensure email was sent with activation code/link
-        self.assertEqual(len(mail.outbox), 1)
-        email_body = mail.outbox[0].body
-        self.assertIn('Activate', mail.outbox[0].subject)
+        # Ensure emails were sent: 1. OTP Verification, 2. Welcome Email
+        self.assertEqual(len(mail.outbox), 2)
+        # Check that one of the emails is the activation/OTP email
+        found_activation = any('Activate' in m.subject or 'Verify' in m.subject for m in mail.outbox)
+        self.assertTrue(found_activation)
 
         # Activate via API using the profile code that's created by signal
         profile = user.profile

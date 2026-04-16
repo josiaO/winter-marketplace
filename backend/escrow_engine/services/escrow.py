@@ -159,11 +159,14 @@ def _refund_funds_locked_body(
                 gateway_reference=txn.gateway_reference,
             )
             if not result.success:
-                logger.warning(
-                    "Gateway refund failed for %s: %s — proceeding with status change.",
+                logger.error(
+                    "Gateway refund failed for %s: %s — ABORTING status change.",
                     txn.reference,
                     result.error,
                 )
+                # We return the transaction in its current state (HOLD or DISPUTED)
+                # but with the failed payment record written.
+                return txn
         except Exception as exc:
             logger.error("Gateway refund call exception for %s: %s", txn.reference, exc)
             write_payment_record(
@@ -296,30 +299,33 @@ def open_dispute(
     if not reason.strip():
         raise ValueError("Dispute reason cannot be empty.")
 
-    if transaction.status not in (TransactionStatus.HOLD, TransactionStatus.DISPUTED):
-        raise ValueError(
-            f"Cannot open dispute for transaction in status {transaction.status}. "
-            "Transaction must be in HOLD state."
-        )
+    with db_transaction.atomic():
+        txn = Transaction.objects.select_for_update().get(pk=transaction.pk)
 
-    # Move transaction to DISPUTED
-    if transaction.status == TransactionStatus.HOLD:
-        transaction.transition_to(
-            TransactionStatus.DISPUTED,
-            actor=opened_by,
-            actor_label=actor_label,
-            reason=f"Dispute opened: {reason[:200]}",
-        )
+        if txn.status not in (TransactionStatus.HOLD, TransactionStatus.DISPUTED):
+            raise ValueError(
+                f"Cannot open dispute for transaction in status {txn.status}. "
+                "Transaction must be in HOLD state."
+            )
 
-    dispute, created = Dispute.objects.get_or_create(
-        transaction=transaction,
-        defaults={
-            'opened_by': opened_by,
-            'reason': reason,
-            'status': Dispute.Status.OPEN,
-            'legacy_order': legacy_order,
-        },
-    )
+        # Move transaction to DISPUTED
+        if txn.status == TransactionStatus.HOLD:
+            txn.transition_to(
+                TransactionStatus.DISPUTED,
+                actor=opened_by,
+                actor_label=actor_label,
+                reason=f"Dispute opened: {reason[:200]}",
+            )
+
+        dispute, created = Dispute.objects.get_or_create(
+            transaction=txn,
+            defaults={
+                'opened_by': opened_by,
+                'reason': reason,
+                'status': Dispute.Status.OPEN,
+                'legacy_order': legacy_order,
+            },
+        )
 
     if not created:
         dispute.reason = reason
@@ -339,9 +345,9 @@ def open_dispute(
         dispute.evidence_images_count = dispute.evidence.filter(media_type='image').count()
         dispute.save(update_fields=['evidence_images_count'])
 
-    _notify_dispute_opened(transaction, dispute)
-    _post_dispute_handler(transaction)
-    logger.info("Dispute opened for transaction %s", transaction.reference)
+    _notify_dispute_opened(txn, dispute)
+    _post_dispute_handler(txn)
+    logger.info("Dispute opened for transaction %s", txn.reference)
     return dispute
 
 

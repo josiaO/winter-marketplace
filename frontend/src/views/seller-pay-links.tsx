@@ -83,7 +83,7 @@ export function SellerPayLinksPage() {
   const fetchListings = useCallback(async () => {
     setIsLoadingListings(true);
     try {
-      const res = await api.listings.my();
+      const res = await api.listings.sellerListings();
       setListings(res.results);
     } catch {
       toast.error('Failed to load your listings.');

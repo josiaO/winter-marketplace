@@ -154,7 +154,7 @@ export function SellerPaymentMethodPage() {
               provider: data.channel,
               account_number: data.phone_number,
               // Fallback to business name or username if account_name isn't in form
-              account_name: sellerProfile?.business_name || user.username || 'Mobile Account',
+              account_name: sellerProfile?.business_name || user?.username || 'Mobile Account',
             }
           : {
               provider: 'bank',
@@ -429,8 +429,8 @@ export function SellerPaymentMethodPage() {
                             ))}
                           </div>
                         )}
-                        {form.formState.errors.channel && (
-                          <p className="text-xs text-destructive">{form.formState.errors.channel.message}</p>
+                        {(form.formState.errors as any).channel && (
+                          <p className="text-xs text-destructive">{(form.formState.errors as any).channel.message}</p>
                         )}
                       </div>
 
@@ -441,10 +441,10 @@ export function SellerPaymentMethodPage() {
                           id="phone_number"
                           placeholder="e.g. 255712345678"
                           {...form.register('phone_number')}
-                          className={form.formState.errors.phone_number ? 'border-destructive' : ''}
+                          className={(form.formState.errors as any).phone_number ? 'border-destructive' : ''}
                         />
-                        {form.formState.errors.phone_number && (
-                          <p className="text-xs text-destructive">{form.formState.errors.phone_number.message}</p>
+                        {(form.formState.errors as any).phone_number && (
+                          <p className="text-xs text-destructive">{(form.formState.errors as any).phone_number.message}</p>
                         )}
                       </div>
                     </>
@@ -459,10 +459,10 @@ export function SellerPaymentMethodPage() {
                           id="bank_name"
                           placeholder="e.g. CRDB, NMB, NBC"
                           {...form.register('bank_name')}
-                          className={form.formState.errors.bank_name ? 'border-destructive' : ''}
+                          className={(form.formState.errors as any).bank_name ? 'border-destructive' : ''}
                         />
-                        {form.formState.errors.bank_name && (
-                          <p className="text-xs text-destructive">{form.formState.errors.bank_name.message}</p>
+                        {(form.formState.errors as any).bank_name && (
+                          <p className="text-xs text-destructive">{(form.formState.errors as any).bank_name.message}</p>
                         )}
                       </div>
 
@@ -473,10 +473,10 @@ export function SellerPaymentMethodPage() {
                           id="account_number"
                           placeholder="e.g. 0152345678900"
                           {...form.register('account_number')}
-                          className={form.formState.errors.account_number ? 'border-destructive' : ''}
+                          className={(form.formState.errors as any).account_number ? 'border-destructive' : ''}
                         />
-                        {form.formState.errors.account_number && (
-                          <p className="text-xs text-destructive">{form.formState.errors.account_number.message}</p>
+                        {(form.formState.errors as any).account_number && (
+                          <p className="text-xs text-destructive">{(form.formState.errors as any).account_number.message}</p>
                         )}
                       </div>
 
@@ -487,10 +487,10 @@ export function SellerPaymentMethodPage() {
                           id="account_name"
                           placeholder="e.g. John Doe"
                           {...form.register('account_name')}
-                          className={form.formState.errors.account_name ? 'border-destructive' : ''}
+                          className={(form.formState.errors as any).account_name ? 'border-destructive' : ''}
                         />
-                        {form.formState.errors.account_name && (
-                          <p className="text-xs text-destructive">{form.formState.errors.account_name.message}</p>
+                        {(form.formState.errors as any).account_name && (
+                          <p className="text-xs text-destructive">{(form.formState.errors as any).account_name.message}</p>
                         )}
                       </div>
                     </>

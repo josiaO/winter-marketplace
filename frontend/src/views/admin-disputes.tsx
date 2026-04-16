@@ -160,7 +160,7 @@ function DisputeCard({
           <div className="grid grid-cols-2 gap-4">
             <div className="flex items-center gap-2">
               <Avatar className="h-7 w-7">
-                <AvatarImage src={buyerAvatar} />
+                <AvatarImage src={buyerAvatar || ''} />
                 <AvatarFallback className="text-[10px]">{buyerInitials}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
@@ -170,7 +170,7 @@ function DisputeCard({
             </div>
             <div className="flex items-center gap-2">
               <Avatar className="h-7 w-7">
-                <AvatarImage src={sellerAvatar} />
+                <AvatarImage src={sellerAvatar || ''} />
                 <AvatarFallback className="text-[10px]">{sellerInitials}</AvatarFallback>
               </Avatar>
               <div className="min-w-0">
@@ -378,7 +378,7 @@ export function AdminDisputesPage() {
 
   if (!isAuthenticated || !user || user.role !== 'admin') return null;
 
-  const totalDisputedAmount = filteredOrders.reduce((sum, o) => sum + o.total, 0);
+  const totalDisputedAmount = filteredOrders.reduce((sum, o) => sum + (o.total || 0), 0);
 
   return (
     <div className="min-h-[80vh] px-4 py-8">

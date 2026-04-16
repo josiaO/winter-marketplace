@@ -321,7 +321,7 @@ export function OrderDetailPage({ orderId }: { orderId: string }) {
 
   const paymentMethodLabel = (() => {
     if (order.payment_channel === 'tigo_pesa') return 'Tigo Pesa';
-    if (order.payment_channel === 'm_pesa') return 'M-Pesa';
+    if (order.payment_channel === 'mpesa') return 'M-Pesa';
     if (order.payment_channel === 'airtel_money') return 'Airtel Money';
     if (order.payment_channel === 'halopesa') return 'Halopesa';
     if (order.payment_channel === 'azam_pay') return 'Azam Pay';

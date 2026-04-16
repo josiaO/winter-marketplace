@@ -14,13 +14,12 @@ const nextConfig = {
       // Django media (dev)
       { protocol: "http", hostname: "127.0.0.1", port: "8000", pathname: "/media/**" },
       { protocol: "http", hostname: "localhost", port: "8000", pathname: "/media/**" },
-      // Allow other upstreams (prod CDNs)
-      { protocol: "https", hostname: "**" },
-      { protocol: "http", hostname: "**" },
+      // Production Storage (Cloudfront / S3 / Cloudinary etc.)
+      // { protocol: "https", hostname: "cdn.smartdalali.com" },
     ],
   },
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   reactStrictMode: false,
   optimizeFonts: false,

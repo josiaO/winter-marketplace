@@ -1,15 +1,39 @@
 """
 escrow_engine.views
 --------------------
-DRF API views for:
-  - Transaction CRUD  (POST /transactions/, GET /transactions/{id}/)
-  - Pay               (POST /transactions/{id}/pay/)
-  - Release           (POST /transactions/{id}/release/)
-  - Refund            (POST /transactions/{id}/refund/)
-  - Disputes          (POST /transactions/{id}/dispute/, POST /disputes/{id}/resolve/)
-  - Selcom webhook    (POST /webhooks/selcom/)
+DRF API views for the escrow engine.
 
-No business logic lives here — all calls delegate to escrow_engine.services.
+══════════════════════════════════════════════════════════════════════════════
+  ✅  IN-APP CORE — READ AND WORK HERE
+══════════════════════════════════════════════════════════════════════════════
+These views power payments and escrow flows that occur INSIDE the SmartDalali
+platform (marketplace orders, buyer/seller transactions, disputes, webhooks):
+
+  - TransactionViewSet  — CRUD + pay / confirm / release / refund / dispute
+  - DisputeResolveView  — Admin resolves a dispute (refund or release)
+  - DisputeViewSet      — List, open, and respond to disputes
+  - SelcomWebhookView   — Inbound Selcom payment notification (HMAC-verified)
+  - EscrowHealthView    — Liveness probe for load balancers
+  - escrow_prometheus_metrics_view — Prometheus scrape endpoint
+
+All business logic lives in escrow_engine.services — views only validate
+input, call services, and format responses.
+
+══════════════════════════════════════════════════════════════════════════════
+  ⏭  SKIP — PAYMENT LINKS (external, out-of-app payments)
+══════════════════════════════════════════════════════════════════════════════
+See the comment fence starting at "# ── BEGIN: PAYMENT LINK VIEWS ──" below.
+This block implements shareable payment URLs for EXTERNAL buyers who have no
+SmartDalali account. It is NOT part of the in-app marketplace escrow flow and
+should be left untouched unless you are specifically working on that feature.
+
+══════════════════════════════════════════════════════════════════════════════
+  ⏭  SKIP — DEVELOPER API (escrow_engine/api/)
+══════════════════════════════════════════════════════════════════════════════
+The Developer API (X-Api-Key, mounted at /api/v1/escrow/dev/) exposes escrow
+to third-party integrators via API keys. It lives in escrow_engine/api/ and
+is completely separate from the in-app flow. Do NOT touch it unless you are
+explicitly working on the external developer-facing API product.
 """
 import logging
 from django.conf import settings
@@ -26,7 +50,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework.exceptions import PermissionDenied
 
-from .throttling import EscrowPaymentLinkScopedThrottle
+# ── BEGIN: IMPORTS USED ONLY BY PAYMENT LINK VIEWS (external / skip) ─────────
+# These symbols are imported exclusively for the Payment Link feature section
+# that starts below at "BEGIN: PAYMENT LINK VIEWS". If you are working on the
+# in-app escrow flow you do not need to read or modify anything related to these
+# imports. They are kept here at the module level because Django / DRF resolves
+# all imports on startup, but logically they belong to the skippable region.
+from .throttling import EscrowPaymentLinkScopedThrottle  # Payment Links only
+# ── END: IMPORTS USED ONLY BY PAYMENT LINK VIEWS ──────────────────────────────
 
 from .models import Transaction, Dispute, PaymentLink, GatewayEvent
 from .models.transaction import TransactionSource
@@ -164,7 +195,9 @@ class TransactionViewSet(viewsets.ModelViewSet):
         POST /transactions/{id}/confirm/   [Admin only]
         Manually confirm payment (for cash / bank transfers).
         """
-        txn = get_object_or_404(Transaction, pk=pk)
+        # BUG FIX: use self.get_object() so check_object_permissions() runs
+        # (IsTransactionParty object-level check was previously bypassed).
+        txn = self.get_object()
         if txn.status not in (TransactionStatus.CREATED, TransactionStatus.PENDING_PAYMENT):
             return Response(
                 {'error': f'Cannot confirm transaction in status {txn.status}.'},
@@ -186,7 +219,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
         POST /transactions/{id}/release/   [Admin only]
         Release escrow funds to the seller.
         """
-        txn = get_object_or_404(Transaction, pk=pk)
+        # BUG FIX: use self.get_object() so check_object_permissions() runs.
+        txn = self.get_object()
         if txn.status != TransactionStatus.HOLD:
             return Response(
                 {'error': f'Can only release funds in HOLD status. Current: {txn.status}.'},
@@ -203,7 +237,8 @@ class TransactionViewSet(viewsets.ModelViewSet):
         POST /transactions/{id}/refund/    [Admin only]
         Refund funds to the buyer.
         """
-        txn = get_object_or_404(Transaction, pk=pk)
+        # BUG FIX: use self.get_object() so check_object_permissions() runs.
+        txn = self.get_object()
         if txn.status not in (TransactionStatus.HOLD, TransactionStatus.DISPUTED):
             return Response(
                 {'error': f'Can only refund from HOLD or DISPUTED state. Current: {txn.status}.'},
@@ -219,7 +254,9 @@ class TransactionViewSet(viewsets.ModelViewSet):
         POST /transactions/{id}/dispute/
         Open a dispute (buyer only or admin).
         """
-        txn = get_object_or_404(Transaction, pk=pk)
+        # BUG FIX: use self.get_object() so check_object_permissions() runs.
+        # Previously get_object_or_404 bypassed IsTransactionParty entirely.
+        txn = self.get_object()
         user = request.user
 
         # Only the buyer or admin can open a dispute
@@ -345,10 +382,24 @@ class SelcomWebhookView(APIView):
             if txn:
                 logger.info("Selcom webhook processed for transaction %s", txn.reference)
                 return Response({'status': 'ok', 'reference': txn.reference})
-        except Exception as exc:
-            logger.error("Selcom webhook processing error: %s", exc)
 
-        return Response({'status': 'received'})
+            # Event was persisted and processed but did not map to a transaction
+            # (e.g. a STATUS ping or informational notification from Selcom).
+            # This is a valid outcome — not an error — so return 200.
+            return Response({'status': 'ok', 'matched': False})
+
+        except Exception as exc:
+            # BUG FIX: previously returned HTTP 200 here, which told Selcom the
+            # event was delivered successfully and it would never retry it. Now
+            # we return 500 so Selcom will retry delivery.
+            logger.error(
+                "Selcom webhook processing error: %s", exc, exc_info=True,
+                extra=log_extra(content_length=len(payload_str)),
+            )
+            return Response(
+                {'error': 'processing_error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
 
 class EscrowHealthView(APIView):
@@ -403,12 +454,75 @@ class EscrowHealthView(APIView):
 
 
 def escrow_prometheus_metrics_view(request):
-    """Plain Django view for Prometheus scrape (no DRF auth)."""
+    """
+    Plain Django view for Prometheus scrape.
+
+    BUG FIX: Previously had no access control, leaking internal operational
+    metrics (transaction volumes, failure rates) to any internet caller.
+    Now restricted to INTERNAL_IPS (plus loopback). Configure
+    settings.INTERNAL_IPS to add your Prometheus scraper's IP(s).
+    """
+    client_ip = (
+        request.META.get('HTTP_X_FORWARDED_FOR', '').split(',')[0].strip()
+        or request.META.get('REMOTE_ADDR', '')
+    )
+    allowed_ips = set(getattr(settings, 'INTERNAL_IPS', [])) | {'127.0.0.1', '::1', '::ffff:127.0.0.1'}
+    if client_ip not in allowed_ips:
+        logger.warning(
+            'Prometheus scrape rejected from non-internal IP: %s',
+            client_ip,
+            extra=log_extra(),
+        )
+        return HttpResponse('Forbidden', status=403, content_type='text/plain')
     payload = escrow_prom.generate_latest()
     return HttpResponse(payload, content_type=escrow_prom.CONTENT_TYPE_LATEST)
 
 
-# ── Payment Link Views ───────────────────────────────────────────────────────
+# ══════════════════════════════════════════════════════════════════════════════
+# ⏭  BEGIN: PAYMENT LINK VIEWS — SKIP THIS SECTION (external / out-of-app)
+# ══════════════════════════════════════════════════════════════════════════════
+#
+# PURPOSE
+# -------
+# This section implements shareable, tokenised payment URLs that allow an
+# EXTERNAL, unauthenticated buyer to pay a SmartDalali seller without having
+# a platform account. It is NOT part of the in-app marketplace escrow flow.
+#
+# HOW IT WORKS
+# ------------
+#   1. An authenticated seller POSTs to /escrow/pay/links/ → CreatePaymentLinkView
+#      creates a PaymentLink (UUID token) backed by a new escrow Transaction.
+#   2. The seller shares the link URL with their external buyer.
+#   3. The buyer visits /escrow/pay/links/{token}/ → PaymentLinkDetailView
+#      (public) to retrieve link details.
+#   4. Before paying, the buyer must verify identity via OTP:
+#        POST /pay/links/{token}/request-otp/ → RequestOTPView  (sends SMS/email)
+#        POST /pay/links/{token}/verify-otp/  → VerifyOTPView   (validates code)
+#   5. The buyer initiates payment:
+#        POST /pay/links/{token}/pay/ → InitiateLinkPaymentView → svc.initiate_payment()
+#
+# SERVICE LAYER
+# -------------
+#   escrow_engine/services/payment_link_service.py
+#     - create_payment_link()  — creates Transaction + PaymentLink
+#     - issue_link_otp()       — generates + delivers OTP (SMS or email)
+#     - verify_link_otp()      — validates submitted OTP, marks link as verified
+#
+# MODEL
+# -----
+#   escrow_engine/models/payment_link.py :: PaymentLink
+#
+# URLS
+# ----
+#   Registered in escrow_engine/urls.py under "# Payment Links":
+#     /escrow/pay/links/
+#     /escrow/pay/links/{token}/
+#     /escrow/pay/links/{token}/request-otp/
+#     /escrow/pay/links/{token}/verify-otp/
+#     /escrow/pay/links/{token}/pay/
+#
+# ⚠️  DO NOT EDIT unless you are specifically working on the Payment Link feature.
+# ══════════════════════════════════════════════════════════════════════════════
 
 class CreatePaymentLinkView(generics.CreateAPIView):
     """
@@ -566,6 +680,10 @@ class InitiateLinkPaymentView(APIView):
         return Response({'success': False, 'error': result.error}, status=status.HTTP_502_BAD_GATEWAY)
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+# ⏭  END: PAYMENT LINK VIEWS — resume reading here for in-app escrow
+# ══════════════════════════════════════════════════════════════════════════════
+
 class DisputeViewSet(viewsets.ModelViewSet):
     """
     ViewSet for managing Disputes.
@@ -580,14 +698,26 @@ class DisputeViewSet(viewsets.ModelViewSet):
         if getattr(self, 'swagger_fake_view', False):
             return Dispute.objects.none()
         user = self.request.user
-        qs = Dispute.objects.all().order_by('-created_at').prefetch_related(
-            'evidence',
-            'transaction__linked_order',
-            'transaction__linked_order__evidence'
+        # BUG FIX: added select_related for the transaction FK and its user FKs.
+        # Previously only prefetch_related was used, which does NOT eliminate
+        # N+1 for a direct FK — each dispute.transaction access fired a new query.
+        qs = (
+            Dispute.objects
+            .select_related(
+                'transaction',
+                'transaction__buyer_user',
+                'transaction__seller_user',
+            )
+            .prefetch_related(
+                'evidence',
+                'transaction__linked_order',
+                'transaction__linked_order__evidence',
+            )
+            .order_by('-created_at')
         )
         if user.is_staff or user.is_superuser:
             return qs
-        
+
         # Filter for parties involved in the transaction
         return qs.filter(
             Q(transaction__buyer_user=user) |
@@ -634,25 +764,14 @@ class DisputeViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_403_FORBIDDEN
             )
 
-        notes = request.data.get('notes', '').strip()
-        if notes:
-            # Append seller notes to the resolution field or a dedicated field if exists
-            # For now, we'll prefix it set it in the resolution field if empty or log it
-            if not dispute.resolution:
-                dispute.resolution = f"Seller Response: {notes}"
-            else:
-                dispute.resolution += f"\n\nSeller Response: {notes}"
-            dispute.status = Dispute.Status.UNDER_REVIEW
-            dispute.save()
-
+        # BUG FIX: validate ALL uploaded files before acquiring the DB lock so
+        # we never enter the atomic block with invalid input.
         evidence_video = request.FILES.get('evidence_video')
         if evidence_video:
             try:
                 validate_dispute_upload_file(evidence_video)
             except ValueError as exc:
                 return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-            dispute.evidence_video = evidence_video
-            dispute.save()
 
         evidence_images = request.FILES.getlist('evidence_images')
         for img in evidence_images:
@@ -660,13 +779,47 @@ class DisputeViewSet(viewsets.ModelViewSet):
                 validate_dispute_upload_file(img)
             except ValueError as exc:
                 return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+
+        notes = request.data.get('notes', '').strip()
+
+        # BUG FIX: wrap field mutations in a single atomic block with a row lock.
+        # Previously two separate dispute.save() calls (notes + video) ran without
+        # a transaction, creating a partial-write window. The read-modify-write on
+        # dispute.resolution also had a race condition when concurrent requests
+        # both read the old value before either write committed.
+        with dj_transaction.atomic():
+            dispute = Dispute.objects.select_for_update().get(pk=dispute.pk)
+            update_fields = []
+
+            if notes:
+                if not dispute.resolution:
+                    dispute.resolution = f"Seller Response: {notes}"
+                else:
+                    dispute.resolution += f"\n\nSeller Response: {notes}"
+                dispute.status = Dispute.Status.UNDER_REVIEW
+                update_fields.extend(['resolution', 'status'])
+
+            if evidence_video:
+                dispute.evidence_video = evidence_video
+                update_fields.append('evidence_video')
+
+            if update_fields:
+                update_fields.append('updated_at')
+                dispute.save(update_fields=update_fields)
+
+        # Evidence images are created outside the text-fields lock (file I/O
+        # should not hold a row lock). Each image is its own row — no race.
+        if evidence_images:
             from .models.dispute import DisputeEvidence
-            DisputeEvidence.objects.create(
-                dispute=dispute,
-                file=img,
-                media_type='image',
-                submitted_by=user,
-                caption='Seller Counter-Evidence'
-            )
+            DisputeEvidence.objects.bulk_create([
+                DisputeEvidence(
+                    dispute=dispute,
+                    file=img,
+                    media_type='image',
+                    submitted_by=user,
+                    caption='Seller Counter-Evidence',
+                )
+                for img in evidence_images
+            ])
 
         return Response(DisputeSerializer(dispute).data)

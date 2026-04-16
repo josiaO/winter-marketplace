@@ -76,6 +76,7 @@ export const routes = {
   
   sellerOnboardingStoreSetup: () => '/seller/onboarding/store-setup',
   sellerOnboardingVerifyIdentity: () => '/seller/onboarding/verify-identity',
+  sellerOnboardingVerifyBusiness: () => '/seller/onboarding/verify-business',
   sellerOnboardingAddPayout: () => '/seller/onboarding/add-payout',
 
   adminDashboard: () => '/admin/dashboard',

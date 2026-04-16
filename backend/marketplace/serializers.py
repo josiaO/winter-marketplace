@@ -34,21 +34,31 @@ class ProductAttributeValueSerializer(serializers.ModelSerializer):
 class MarketplaceItemSerializer(serializers.ModelSerializer):
     media = ListingMediaSerializer(many=True, read_only=True)
     category_name = serializers.CharField(source='category.name', read_only=True)
+    categoryName = serializers.CharField(source='category.name', read_only=True)
     owner_name = serializers.SerializerMethodField()
-    attribute_values = ProductAttributeValueSerializer(many=True, read_only=True)
+    ownerName = serializers.CharField(source='owner.username', read_only=True)
+    isPublished = serializers.BooleanField(source='is_published', read_only=True)
+    isVerified = serializers.BooleanField(source='is_verified', read_only=True)
+    viewCount = serializers.IntegerField(source='view_count', read_only=True)
+    createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    updatedAt = serializers.DateTimeField(source='updated_at', read_only=True)
     is_ghost_listing = serializers.SerializerMethodField()
+    isGhostListing = serializers.SerializerMethodField()
     seller_status_message = serializers.SerializerMethodField()
     similar_listings = serializers.SerializerMethodField()
 
     class Meta:
         model = MarketplaceItem
         fields = [
-            'id', 'category', 'category_name', 'owner', 'owner_name',
+            'id', 'category', 'category_name', 'categoryName', 'owner', 'owner_name', 'ownerName',
             'title', 'description', 'price', 'status', 'listing_type', 'store',
             'condition', 'city', 'address', 'latitude', 'longitude',
-            'specs', 'attribute_values', 'is_published', 'view_count', 'created_at',
-            'updated_at', 'media', 'stock_quantity', 'track_inventory',
-            'is_verified', 'is_flagged', 'is_ghost_listing', 'seller_status_message', 'similar_listings'
+            'specs', 'attribute_values', 'is_published', 'isPublished', 'view_count', 'viewCount', 
+            'created_at', 'createdAt', 'updated_at', 'updatedAt', 'media', 
+            'stock_quantity', 'track_inventory', 'low_stock_threshold', 'allow_backorders',
+            'delivery_is_free', 'delivery_fee',
+            'is_verified', 'isVerified', 'is_flagged', 'is_ghost_listing', 'isGhostListing', 
+            'seller_status_message', 'similar_listings'
         ]
         read_only_fields = ['owner', 'view_count', 'created_at', 'updated_at']
 
@@ -92,6 +102,10 @@ class MarketplaceItemSerializer(serializers.ModelSerializer):
 
     @extend_schema_field(serializers.BooleanField())
     def get_is_ghost_listing(self, obj):
+        return obj.is_ghost_listing
+
+    @extend_schema_field(serializers.BooleanField())
+    def get_isGhostListing(self, obj):
         return obj.is_ghost_listing
 
     @extend_schema_field(serializers.CharField())

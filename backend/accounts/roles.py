@@ -21,6 +21,8 @@ def get_user_role(user):
     try:
         if user.groups.filter(name='seller').exists():
             return ROLE_SELLER
+        if user.groups.filter(name='agent').exists():
+            return 'agent'
     except Exception:
         # defensive: if groups relation isn't available
         pass

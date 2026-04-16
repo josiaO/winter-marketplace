@@ -176,7 +176,7 @@ export function PaymentReturnPage() {
               {status === 'error' && (
                 <div className="flex flex-col gap-2">
                   <Button className="w-full rounded-xl" onClick={handleRetry}>
-                    <Loader2 className={cn("w-4 h-4 mr-2", status !== 'loading' && "hidden")} />
+                    <Loader2 className="w-4 h-4 mr-2 hidden" />
                     Retry Confirmation
                   </Button>
                   {orderId && (

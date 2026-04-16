@@ -9,23 +9,15 @@ from django.conf import settings
 from django.utils.translation import gettext_lazy as _
 
 
-class DisputeStatus(models.TextChoices):
-    OPEN = 'open', _('Open')
-    UNDER_REVIEW = 'under_review', _('Under Review')
-    RESOLVED = 'resolved', _('Resolved')
-    CLOSED = 'closed', _('Closed')
+from ..state_machine import DisputeStatus, DisputeResolution
 
 
 class Dispute(models.Model):
 
     # backward-compat alias
     Status = DisputeStatus
+    Resolution = DisputeResolution
 
-    class Resolution(models.TextChoices):
-        REFUND_BUYER = 'refund_buyer', _('Refund to Buyer')
-        RELEASE_SELLER = 'release_seller', _('Release to Seller')
-        PARTIAL_REFUND = 'partial_refund', _('Partial Refund')
-        NO_ACTION = 'no_action', _('No Action Required')
 
     # Primary link: the engine transaction
     transaction = models.OneToOneField(

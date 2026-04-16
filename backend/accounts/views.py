@@ -236,7 +236,7 @@ class MyTokenObtainPairView(TokenObtainPairView):
         except Exception as e:
             logger.warning(f"TokenObtain: Login failed. Error: {str(e)}")
             return Response(
-                {'error': 'Invalid credentials'},
+                {'error': 'Invalid credentials. Please check your email/username and password.'},
                 status=status.HTTP_401_UNAUTHORIZED
             )
 
@@ -1008,3 +1008,15 @@ def change_password_with_otp(request):
 
     logger.info(f'Password changed via OTP for user {user.email}')
     return Response({'message': 'Password changed successfully.'})
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def issue_ws_ticket(request):
+    """
+    Issue a short-lived one-time ticket for WebSocket authentication.
+    TTL is 60 seconds (handshake typically happens within 1s).
+    """
+    ticket = secrets.token_urlsafe(32)
+    cache.set(f"ws_ticket_{ticket}", request.user.id, timeout=60)
+    return Response({'ticket': ticket})

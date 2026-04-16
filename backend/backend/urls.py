@@ -144,7 +144,9 @@ if getattr(settings, 'ENABLE_SILK', False):
 from django.views.static import serve
 from django.urls import re_path
 
-if settings.DEBUG or os.getenv('DJANGO_ENV') != 'production':
+# Debug toolbar and static media serving in non-production environments
+is_production = os.getenv('DJANGO_ENV') == 'production'
+if settings.DEBUG or not is_production:
     try:
         import debug_toolbar
         urlpatterns = [
@@ -153,8 +155,10 @@ if settings.DEBUG or os.getenv('DJANGO_ENV') != 'production':
     except ImportError:
         pass
         
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-    # Fallback for serving media files if static() helper doesn't work (e.g. some Channels configs)
-    urlpatterns += [
-        re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
-    ]
+    # Only append static/media routes if the settings are configured
+    if getattr(settings, 'MEDIA_URL', None) and getattr(settings, 'MEDIA_ROOT', None):
+        urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+        # Fallback for serving media files if static() helper doesn't work (e.g. some Channels configs)
+        urlpatterns += [
+            re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
+        ]

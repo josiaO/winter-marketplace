@@ -170,7 +170,7 @@ export function ProductPage({ productId }: { productId: string }) {
         setIsLoadingReviews(false);
 
         // Set primary image
-        const primaryIdx = normalizedListing.images?.findIndex((img) => img.isPrimary || img.is_primary);
+        const primaryIdx = normalizedListing.images?.findIndex((img) => img.is_primary);
         if (primaryIdx >= 0) setSelectedImage(primaryIdx);
 
         // Optional eligibility check (don't block main UI for this)

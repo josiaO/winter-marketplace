@@ -6,8 +6,8 @@ from django.conf import settings
 from django.db import transaction as db_transaction
 from django.utils import timezone
 
-from .models import Transaction, Payout, GatewayEvent
-from .state_machine import TransactionStatus
+from .models import Transaction, Payout, GatewayEvent, Dispute
+from .state_machine import TransactionStatus, DisputeStatus
 from .services.metrics_log import log_escrow_failure
 import escrow_engine.services.escrow as escrow_svc
 
@@ -122,24 +122,34 @@ def release_delivered_marketplace_escrow_periodic():
     Lives in escrow_engine so timed money movement is not scheduled from commerce.
     """
     cutoff = timezone.now() - timedelta(days=7)
-    eligible = Transaction.objects.filter(
+    eligible_ids = list(Transaction.objects.filter(
         status=TransactionStatus.HOLD,
         linked_order__status='delivered',
         linked_order__delivered_at__lte=cutoff,
-    )
+    ).values_list('pk', flat=True))
+    
     count = 0
-    for txn in eligible:
+    for pk in eligible_ids:
         try:
-            escrow_svc.release_funds(
-                txn,
-                actor_label='System: Delivered-order auto-release',
-                reason='Auto-release after 7 days in delivered status.',
-            )
-            count += 1
+            with db_transaction.atomic():
+                txn = (
+                    Transaction.objects.select_for_update(skip_locked=True)
+                    .filter(pk=pk, status=TransactionStatus.HOLD)
+                    .first()
+                )
+                if not txn:
+                    continue
+                
+                escrow_svc.release_funds(
+                    txn,
+                    actor_label='System: Delivered-order auto-release',
+                    reason='Auto-release after 7 days in delivered status.',
+                )
+                count += 1
         except Exception as exc:
             logger.error(
                 'Auto-release failed for txn %s: %s',
-                getattr(txn, 'reference', txn.pk),
+                pk,
                 exc,
             )
     logger.info('Triggered auto escrow release for %s transactions', count)
@@ -151,7 +161,7 @@ def auto_resolve_unresponsive_seller_disputes_periodic():
     1. At 24h: Sends a FINAL WARNING to the seller if they haven't uploaded evidence.
     2. At 48h: Auto-refunds the buyer if no seller response is found.
     """
-    from .models import Dispute, DisputeStatus
+    # Using top-level imports
     from .services import escrow as escrow_svc
     from communications.models import Notification
     
@@ -179,7 +189,7 @@ def auto_resolve_unresponsive_seller_disputes_periodic():
                     if d.status != DisputeStatus.OPEN:
                         continue
                         
-                    escrow_svc.refund_buyer(
+                    escrow_svc.refund_funds(
                         d.transaction,
                         actor_label='System: Auto-Resolution',
                         reason=f'Seller failed to respond within 48-hour dispute window. Dispute ID: {d.id}'

@@ -34,6 +34,20 @@ class TransactionStatus(models.TextChoices):
 TRANSACTION_STATUS_CHOICES = TransactionStatus.choices
 
 
+class DisputeStatus(models.TextChoices):
+    OPEN = 'open', _('Open')
+    UNDER_REVIEW = 'under_review', _('Under Review')
+    RESOLVED = 'resolved', _('Resolved')
+    CLOSED = 'closed', _('Closed')
+
+
+class DisputeResolution(models.TextChoices):
+    REFUND_BUYER = 'refund_buyer', _('Refund to Buyer')
+    RELEASE_SELLER = 'release_seller', _('Release to Seller')
+    PARTIAL_REFUND = 'partial_refund', _('Partial Refund')
+    NO_ACTION = 'no_action', _('No Action Required')
+
+
 # ── Allowed transitions ───────────────────────────────────────────────────────
 _TRANSITIONS: dict[str, set[str]] = {
     TransactionStatus.CREATED:         {TransactionStatus.PENDING_PAYMENT, TransactionStatus.CANCELLED},

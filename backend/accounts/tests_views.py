@@ -4,7 +4,6 @@ from rest_framework.test import APIClient
 from rest_framework import status
 from django.contrib.auth.models import User, Group
 from accounts.models import Profile
-from properties.models import AgentProfile
 
 class AccountsViewTests(TestCase):
     def setUp(self):
@@ -25,7 +24,7 @@ class AccountsViewTests(TestCase):
         self.agent.groups.add(agent_group)
         if not hasattr(self.agent, 'profile'):
              Profile.objects.create(user=self.agent)
-        AgentProfile.objects.create(user=self.agent, profile=self.agent.profile)
+        # AgentProfile is decommissioned
 
     def test_login(self):
         url = reverse('accounts:token_obtain_pair')
@@ -51,9 +50,9 @@ class AccountsViewTests(TestCase):
         response = self.client.post(url, data, format='json')
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(User.objects.filter(username='newuser').exists())
-        self.assertIn('access', response.data)
-        self.assertIn('refresh', response.data)
-        self.assertIn('user', response.data)
+        # Tokens are NOT returned because user is inactive/requires activation
+        self.assertIn('message', response.data)
+        self.assertNotIn('access', response.data)
 
     def test_get_current_user_profile(self):
         self.client.force_authenticate(user=self.user)

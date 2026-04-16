@@ -8,6 +8,8 @@ from rest_framework_simplejwt.tokens import AccessToken
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from urllib.parse import parse_qs
 
+from django.core.cache import cache
+
 User = get_user_model()
 
 AUTH_COOKIE_NAMES = ("smartdalali_auth_token", "auth_token")
@@ -68,18 +70,49 @@ def _token_from_subprotocols(scope) -> Optional[str]:
     return None
 
 
+@database_sync_to_async
+def _get_user_from_ticket(ticket: str) -> Optional[User]:
+    """
+    Validate a one-time ticket against cache.
+    If valid, returns the User and clears the ticket.
+    """
+    cache_key = f"ws_ticket_{ticket}"
+    user_id = cache.get(cache_key)
+    if not user_id:
+        return None
+    
+    # Immediately clear the ticket (one-time use)
+    cache.delete(cache_key)
+    
+    try:
+        return User.objects.get(id=user_id)
+    except User.DoesNotExist:
+        return None
+
+
 def _extract_jwt_token(scope) -> Optional[str]:
-    # 1) Subprotocol (preferred — not in URL / query string)
+    """
+    Extracts a JWT token from subprotocols, cookies, or query string.
+    Note: Returns 'TICKET:<val>' if a ticket is found instead of a JWT.
+    """
+    # 0) Handshake Ticket (Primary for browser clients in secure HttpOnly environment)
+    query_string = scope.get("query_string", b"").decode()
+    query_params = parse_qs(query_string)
+    ticket = query_params.get("ticket", [None])[0]
+    if ticket:
+        return f"TICKET:{ticket}"
+
+    # 1) Subprotocol (Fallback / Direct API clients)
     t = _token_from_subprotocols(scope)
     if t:
         return t
-    # 2) Query string (legacy)
-    query_string = scope.get("query_string", b"").decode()
-    query_params = parse_qs(query_string)
+
+    # 2) Query string (Legacy fallback)
     t = query_params.get("token", [None])[0]
     if t:
         return t
-    # 3) Cookie on WebSocket handshake (same-site API + app)
+
+    # 3) Cookie (Same-site deployments)
     return _token_from_cookie_header(_get_header(scope, b"cookie"))
 
 
@@ -118,11 +151,22 @@ class JWTAuthMiddleware:
     async def __call__(self, scope, receive, send):
         try:
             print(f"DEBUG: WebSocket request for {scope.get('path')} from {scope.get('client')}")
-            token = _extract_jwt_token(scope)
-            if token:
-                scope["user"] = await get_user(token)
+            identifier = _extract_jwt_token(scope)
+            
+            if identifier:
+                if identifier.startswith("TICKET:"):
+                    ticket = identifier.split(":", 1)[1]
+                    user = await _get_user_from_ticket(ticket)
+                    if user:
+                        print(f"✅ WebSocket Auth Success: User {user.username} via Ticket")
+                        scope["user"] = user
+                    else:
+                        print(f"❌ WebSocket Auth Failed: Invalid or expired Ticket")
+                        scope["user"] = AnonymousUser()
+                else:
+                    scope["user"] = await get_user(identifier)
             else:
-                print("DEBUG: No token found in WebSocket request")
+                print("DEBUG: No auth identifier found in WebSocket request")
                 scope["user"] = AnonymousUser()
 
             return await self.app(scope, receive, send)

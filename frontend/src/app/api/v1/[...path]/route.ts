@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 
 function djangoOrigin(): string {
   return (
@@ -21,8 +22,18 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path?: s
   const upstream = buildUpstreamUrl(path, search);
 
   const headers = new Headers();
-  const auth = request.headers.get('authorization');
-  if (auth) headers.set('Authorization', auth);
+  
+  // 1. Handle Authorization: Prioritize cookies for HttpOnly security, fallback to header
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get('sd_access_token')?.value;
+  const authHeader = request.headers.get('authorization');
+  
+  if (accessToken) {
+    headers.set('Authorization', `Bearer ${accessToken}`);
+  } else if (authHeader) {
+    headers.set('Authorization', authHeader);
+  }
+
   const lang = request.headers.get('accept-language');
   if (lang) headers.set('Accept-Language', lang);
   const contentType = request.headers.get('content-type');
@@ -38,15 +49,72 @@ async function proxy(request: NextRequest, context: { params: Promise<{ path?: s
 
   try {
     const res = await fetch(upstream, init);
+    
+    // Intercept specific auth endpoints to set HttpOnly cookies
+    const pathStr = path.join('/');
+    const isTokenResp = pathStr === 'accounts/auth/token' || 
+                        pathStr === 'accounts/auth/token/refresh' ||
+                        pathStr === 'accounts/profile/become-seller';
+
     const outHeaders = new Headers(res.headers);
     outHeaders.delete('Access-Control-Allow-Origin');
     outHeaders.delete('Access-Control-Allow-Credentials');
 
-    return new NextResponse(res.body, {
+    // If we need to intercept tokens, we MUST NOT pass res.body to NextResponse yet,
+    // because reading it later (even with clone()) causes lock issues in Next.js.
+    // Instead, we consume it into a buffer for these specific endpoints.
+    if (res.ok && isTokenResp) {
+      const buffer = await res.arrayBuffer();
+      const response = new NextResponse(buffer, {
+        status: res.status,
+        statusText: res.statusText,
+        headers: outHeaders,
+      });
+
+      try {
+        const text = new TextDecoder().decode(buffer);
+        const dataRes = JSON.parse(text);
+        const access = dataRes.access;
+        const refresh = dataRes.refresh;
+
+        if (access) {
+          response.cookies.set('sd_access_token', access, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 60 * 60, // 1 hour
+          });
+        }
+        if (refresh) {
+          response.cookies.set('sd_refresh_token', refresh, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            path: '/',
+            maxAge: 30 * 24 * 60 * 60, // 30 days
+          });
+        }
+      } catch (err) {
+        console.warn('[api proxy] Failed to parse token response as JSON:', err);
+      }
+      return response;
+    }
+
+    // Default: Stream the response body
+    const response = new NextResponse(res.body, {
       status: res.status,
       statusText: res.statusText,
       headers: outHeaders,
     });
+
+    // Handle logout: Clear cookies
+    if (pathStr === 'accounts/auth/logout') {
+      response.cookies.delete('sd_access_token');
+      response.cookies.delete('sd_refresh_token');
+    }
+
+    return response;
   } catch (e) {
     console.error('[api/v1 proxy] upstream fetch failed:', upstream, e);
     return NextResponse.json(

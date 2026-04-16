@@ -80,19 +80,15 @@ class OnboardingProgressView(APIView):
             sp = request.user.seller_profile
         except (AttributeError, SellerProfile.DoesNotExist):
             return Response({
-                'step_registration': True,
-                'step_store_setup': False,
-                'step_id_submitted': False,
-                'step_id_approved': False,
-                'step_payout_added': False,
-                'step_first_product': False,
-                'step_business_upgraded': False,
+                'is_seller': False,
+                'steps': {
+                    'profile': {'complete': False, 'locked': False},
+                    'identity': {'complete': False, 'locked': True},
+                    'payout': {'complete': False, 'locked': True},
+                    'listing': {'complete': False, 'locked': True},
+                },
                 'completion_percentage': 0,
                 'verification_status': 'not_started',
-                'store_is_active': False,
-                'rejection_reason': None,
-                'message_en': 'Please complete store setup to become a seller.',
-                'message_sw': 'Tafadhali kamilisha maelezo ya duka ili uwe muuzaji.',
             })
 
         from trust.models import UserVerification
@@ -101,17 +97,44 @@ class OnboardingProgressView(APIView):
         progress, _ = SellerOnboardingProgress.objects.get_or_create(seller=sp)
         uv, _ = UserVerification.objects.get_or_create(user=request.user)
         
+        # Robust completion checks
+        has_profile = bool(sp.store_name and sp.store_location and (sp.store_categories or sp.store_category))
+        has_id_submitted = uv.id_status != UserVerificationStatus.NOT_SUBMITTED
+        has_id_approved = sp.verification_status == 'verified'
+        has_payout = sp.payout_accounts.filter(is_verified=True).exists()
+        has_listing = Listing.objects.filter(owner=request.user).exists()
+
         rejection = None
         if uv.id_status == UserVerificationStatus.REJECTED:
             rejection = uv.reviewer_notes or None
 
         payload = {
-            'step_registration': progress.step_registration,
-            'step_store_setup': progress.step_store_setup,
-            'step_id_submitted': (uv.id_status == UserVerificationStatus.PENDING or sp.verification_status == 'under_review'),
-            'step_id_approved': (sp.verification_status == 'verified'),
-            'step_payout_added': progress.step_payout_added,
-            'step_first_product': progress.step_first_product,
+            'is_seller': True,
+            'steps': {
+                'profile': {
+                    'complete': has_profile,
+                    'locked': False
+                },
+                'identity': {
+                    'complete': has_id_approved,
+                    'submitted': has_id_submitted,
+                    'locked': not has_profile
+                },
+                'payout': {
+                    'complete': has_payout,
+                    'locked': not has_id_approved
+                },
+                'listing': {
+                    'complete': has_listing,
+                    'locked': not has_payout
+                }
+            },
+            'step_registration': True,
+            'step_store_setup': has_profile,
+            'step_id_submitted': has_id_submitted,
+            'step_id_approved': has_id_approved,
+            'step_payout_added': has_payout,
+            'step_first_product': has_listing,
             'step_business_upgraded': (uv.tin_status == UserVerificationStatus.VERIFIED and uv.business_license_document != ""),
             'completion_percentage': seller_svc.get_onboarding_completion_percentage(progress),
             'verification_status': sp.verification_status,

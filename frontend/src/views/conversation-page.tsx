@@ -117,10 +117,10 @@ export function ConversationPage({ conversationId }: { conversationId: string })
         
         if (conv.other_participant) {
           parts.push(conv.other_participant);
-        } else if (conv.seller && typeof conv.seller === 'object') {
-          parts.push(conv.seller as any);
-        } else if (conv.user && typeof conv.user === 'object') {
-          parts.push(conv.user as any);
+        } else if ((conv as any).seller && typeof (conv as any).seller === 'object') {
+          parts.push((conv as any).seller);
+        } else if ((conv as any).user && typeof (conv as any).user === 'object') {
+          parts.push((conv as any).user);
         }
         
         setParticipants(parts);
@@ -152,7 +152,7 @@ export function ConversationPage({ conversationId }: { conversationId: string })
       }
 
       // Use accessToken for auth
-      const accessToken = useAuthStore.getState().accessToken;
+      const accessToken = api.getAccessToken();
       
       // Preferred: Use Sec-WebSocket-Protocol (avoids tokens in query string)
       // Middleware expects: sd-jwt, <base64url(token)>

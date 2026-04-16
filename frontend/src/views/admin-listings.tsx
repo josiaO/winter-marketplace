@@ -335,7 +335,7 @@ export function AdminListingsPage() {
                                       {thumb ? (
                                         <div className="w-10 h-10 rounded-lg bg-muted overflow-hidden shrink-0">
                                           <img
-                                            src={thumb.image || (thumb as Record<string, string>).url || ''}
+                                      src={thumb.image || (thumb as any).url || ''}
                                             alt={listing.title}
                                             className="w-full h-full object-cover"
                                           />
@@ -487,7 +487,7 @@ export function AdminListingsPage() {
                                 {thumb ? (
                                   <div className="w-14 h-14 rounded-lg bg-muted overflow-hidden shrink-0">
                                     <img
-                                      src={thumb.image || (thumb as Record<string, string>).url || ''}
+                                      src={thumb.image || (thumb as any).url || ''}
                                       alt={listing.title}
                                       className="w-full h-full object-cover"
                                     />

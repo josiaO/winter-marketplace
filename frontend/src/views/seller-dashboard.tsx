@@ -43,6 +43,13 @@ import {
 import type { CommerceSellerStats, Order, PaginatedResponse, SellerStats, Notification, Listing } from '@/types/api';
 
 type OnboardingProgressState = {
+  is_seller: boolean;
+  steps: {
+    profile: { complete: boolean; locked: boolean };
+    identity: { complete: boolean; submitted: boolean; locked: boolean };
+    payout: { complete: boolean; locked: boolean };
+    listing: { complete: boolean; locked: boolean };
+  };
   step_registration?: boolean;
   step_store_setup?: boolean;
   step_first_product?: boolean;
@@ -167,10 +174,10 @@ export function SellerDashboardPage() {
   // All 4 steps must be done to hide the onboarding section
   const allStepsDone = Boolean(
     progress &&
-    progress.step_store_setup &&
-    progress.step_first_product &&
-    progress.step_id_approved &&
-    progress.step_payout_added
+    progress.steps?.profile?.complete &&
+    progress.steps?.identity?.complete &&
+    progress.steps?.payout?.complete &&
+    progress.steps?.listing?.complete
   );
 
   // Show the onboarding missions card whenever steps are NOT all done
@@ -314,16 +321,16 @@ export function SellerDashboardPage() {
                     {/* ── Step 1: Store Basics ──────────────────────── */}
                     <div
                       className={`relative group p-6 rounded-3xl border-2 transition-all ${
-                        progress?.step_store_setup
+                        progress?.steps?.profile?.complete
                           ? 'border-emerald-200 bg-emerald-50/50'
                           : 'border-indigo-100 bg-white hover:border-primary/30'
                       }`}
                     >
                       <div className="flex justify-between items-start mb-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                          <Store className={`w-5 h-5 ${progress?.step_store_setup ? 'text-emerald-600' : 'text-primary'}`} />
+                          <Store className={`w-5 h-5 ${progress?.steps?.profile?.complete ? 'text-emerald-600' : 'text-primary'}`} />
                         </div>
-                        {progress?.step_store_setup ? (
+                        {progress?.steps?.profile?.complete ? (
                           <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                         ) : (
                           <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
@@ -331,7 +338,7 @@ export function SellerDashboardPage() {
                       </div>
                       <h4 className="font-bold text-gray-900 mb-1">1. Store Basics</h4>
                       <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">Name and category for your shop.</p>
-                      {!progress?.step_store_setup && (
+                      {!progress?.steps?.profile?.complete && (
                         <Button
                           size="sm"
                           className="w-full rounded-xl font-bold transition-all group-hover:shadow-lg shadow-primary/20"
@@ -342,18 +349,18 @@ export function SellerDashboardPage() {
                       )}
                     </div>
 
-                    {/* ── Step 2: Add Product ──────────────────────── */}
+                    {/* ── Step 2: Verify Identity (Was Step 3) ────────────────────── */}
                     <div
                       className={`relative group p-6 rounded-3xl border-2 transition-all ${
-                        progress?.step_first_product
+                        progress?.steps?.identity?.complete
                           ? 'border-emerald-200 bg-emerald-50/50'
-                          : progress?.step_store_setup
+                          : !progress?.steps?.identity?.locked
                           ? 'border-indigo-100 bg-white hover:border-primary/30'
                           : 'border-gray-100 bg-gray-50/50 opacity-70'
                       }`}
                     >
-                      {/* Lock overlay when Step 1 not done */}
-                      {!progress?.step_store_setup && (
+                      {/* Lock overlay */}
+                      {progress?.steps?.identity?.locked && (
                         <div className="absolute inset-0 rounded-3xl flex items-center justify-center bg-white/60 backdrop-blur-[1px] z-10">
                           <div className="flex flex-col items-center gap-1 text-gray-400">
                             <Lock className="w-5 h-5" />
@@ -363,42 +370,46 @@ export function SellerDashboardPage() {
                       )}
                       <div className="flex justify-between items-start mb-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                          <Package className={`w-5 h-5 ${progress?.step_first_product ? 'text-emerald-600' : 'text-primary'}`} />
+                          <User className={`w-5 h-5 ${progress?.steps?.identity?.complete ? 'text-emerald-600' : 'text-primary'}`} />
                         </div>
-                        {progress?.step_first_product ? (
+                        {progress?.steps?.identity?.complete ? (
                           <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                         ) : (
                           <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
                         )}
                       </div>
-                      <h4 className="font-bold text-gray-900 mb-1">2. Add Product</h4>
-                      <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">
-                        Your listing saves as <span className="text-amber-600 font-bold italic">draft</span> until verified.
-                      </p>
-                      {!progress?.step_first_product && (
+                      <h4 className="font-bold text-gray-900 mb-1">2. Verify Identity</h4>
+                      <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">Required for trust and payout safety.</p>
+                      {!progress?.steps?.identity?.complete ? (
                         <Button
                           size="sm"
-                          disabled={!progress?.step_store_setup}
-                          className="w-full rounded-xl font-bold transition-all group-hover:shadow-lg shadow-primary/20"
-                          onClick={() => router.push(routes.sellerListingNew())}
+                          disabled={progress?.steps?.identity?.locked}
+                          className={`w-full rounded-xl font-bold transition-all ${
+                            progress?.steps?.identity?.submitted
+                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                              : 'group-hover:shadow-lg shadow-primary/20'
+                          }`}
+                          onClick={() => router.push(routes.sellerOnboardingVerifyIdentity())}
                         >
-                          List Now
+                          {progress?.steps?.identity?.submitted ? 'Under Review ⏳' : 'Verify Identity'}
                         </Button>
+                      ) : (
+                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest text-center mt-2">Verified Seller ✅</p>
                       )}
                     </div>
 
-                    {/* ── Step 3: Verify Identity ────────────────────── */}
+                    {/* ── Step 3: Payout Method (Was Step 4) ─────────────────────── */}
                     <div
                       className={`relative group p-6 rounded-3xl border-2 transition-all ${
-                        progress?.step_id_approved
+                        progress?.steps?.payout?.complete
                           ? 'border-emerald-200 bg-emerald-50/50'
-                          : progress?.step_first_product
+                          : !progress?.steps?.payout?.locked
                           ? 'border-indigo-100 bg-white hover:border-primary/30'
                           : 'border-gray-100 bg-gray-50/50 opacity-70'
                       }`}
                     >
-                      {/* Lock overlay when Step 2 not done */}
-                      {!progress?.step_first_product && (
+                      {/* Lock overlay */}
+                      {progress?.steps?.payout?.locked && (
                         <div className="absolute inset-0 rounded-3xl flex items-center justify-center bg-white/60 backdrop-blur-[1px] z-10">
                           <div className="flex flex-col items-center gap-1 text-gray-400">
                             <Lock className="w-5 h-5" />
@@ -408,46 +419,40 @@ export function SellerDashboardPage() {
                       )}
                       <div className="flex justify-between items-start mb-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                          <User className={`w-5 h-5 ${progress?.step_id_approved ? 'text-emerald-600' : 'text-primary'}`} />
+                          <Wallet className={`w-5 h-5 ${progress?.steps?.payout?.complete ? 'text-emerald-600' : 'text-primary'}`} />
                         </div>
-                        {progress?.step_id_approved ? (
+                        {progress?.steps?.payout?.complete ? (
                           <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                         ) : (
                           <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
                         )}
                       </div>
-                      <h4 className="font-bold text-gray-900 mb-1">3. Verify Identity</h4>
-                      <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">Required for trust and payout safety.</p>
-                      {!progress?.step_id_approved ? (
+                      <h4 className="font-bold text-gray-900 mb-1">3. Payout Method</h4>
+                      <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">Set up your bank or mobile wallet.</p>
+                      {!progress?.steps?.payout?.complete && (
                         <Button
                           size="sm"
-                          disabled={!progress?.step_first_product}
-                          className={`w-full rounded-xl font-bold transition-all ${
-                            progress?.step_id_submitted
-                              ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                              : 'group-hover:shadow-lg shadow-primary/20'
-                          }`}
-                          onClick={() => router.push(routes.sellerOnboardingVerifyIdentity())}
+                          disabled={progress?.steps?.payout?.locked}
+                          className="w-full rounded-xl font-bold transition-all group-hover:shadow-lg shadow-primary/20"
+                          onClick={() => router.push(routes.sellerOnboardingAddPayout())}
                         >
-                          {progress?.step_id_submitted ? 'Under Review ⏳' : 'Verify Identity'}
+                          Add Payout
                         </Button>
-                      ) : (
-                        <p className="text-[10px] font-black text-emerald-600 uppercase tracking-widest text-center mt-2">Verified Seller ✅</p>
                       )}
                     </div>
 
-                    {/* ── Step 4: Payout Method ─────────────────────── */}
+                    {/* ── Step 4: Add Product (Now last) ──────────────────────── */}
                     <div
                       className={`relative group p-6 rounded-3xl border-2 transition-all ${
-                        progress?.step_payout_added
+                        progress?.steps?.listing?.complete
                           ? 'border-emerald-200 bg-emerald-50/50'
-                          : progress?.step_id_approved
+                          : !progress?.steps?.listing?.locked
                           ? 'border-indigo-100 bg-white hover:border-primary/30'
                           : 'border-gray-100 bg-gray-50/50 opacity-70'
                       }`}
                     >
-                      {/* Lock overlay when Step 3 not done */}
-                      {!progress?.step_id_approved && (
+                      {/* Lock overlay */}
+                      {progress?.steps?.listing?.locked && (
                         <div className="absolute inset-0 rounded-3xl flex items-center justify-center bg-white/60 backdrop-blur-[1px] z-10">
                           <div className="flex flex-col items-center gap-1 text-gray-400">
                             <Lock className="w-5 h-5" />
@@ -457,24 +462,26 @@ export function SellerDashboardPage() {
                       )}
                       <div className="flex justify-between items-start mb-3">
                         <div className="w-10 h-10 rounded-2xl bg-indigo-50 flex items-center justify-center">
-                          <Wallet className={`w-5 h-5 ${progress?.step_payout_added ? 'text-emerald-600' : 'text-primary'}`} />
+                          <Package className={`w-5 h-5 ${progress?.steps?.listing?.complete ? 'text-emerald-600' : 'text-primary'}`} />
                         </div>
-                        {progress?.step_payout_added ? (
+                        {progress?.steps?.listing?.complete ? (
                           <CheckCircle2 className="w-6 h-6 text-emerald-500" />
                         ) : (
                           <div className="w-6 h-6 rounded-full border-2 border-primary/20" />
                         )}
                       </div>
-                      <h4 className="font-bold text-gray-900 mb-1">4. Payout Method</h4>
-                      <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">Set up your bank or mobile wallet.</p>
-                      {!progress?.step_payout_added && (
+                      <h4 className="font-bold text-gray-900 mb-1">4. Add Product</h4>
+                      <p className="text-xs text-muted-foreground mb-4 font-medium leading-relaxed">
+                        List your first item to make your shop public.
+                      </p>
+                      {!progress?.steps?.listing?.complete && (
                         <Button
                           size="sm"
-                          disabled={!progress?.step_id_approved}
+                          disabled={progress?.steps?.listing?.locked}
                           className="w-full rounded-xl font-bold transition-all group-hover:shadow-lg shadow-primary/20"
-                          onClick={() => router.push(routes.sellerOnboardingAddPayout())}
+                          onClick={() => router.push(routes.sellerListingNew())}
                         >
-                          Add Payout
+                          List Now
                         </Button>
                       )}
                     </div>

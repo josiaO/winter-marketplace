@@ -13,6 +13,8 @@ import {
   Save,
   Send,
   ImageOff,
+  Minus,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useForm } from 'react-hook-form';
@@ -201,18 +203,18 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
         form.reset({
           title: data.title || '',
           description: data.description || '',
-          price: data.price || 0,
-          condition: data.condition || 'new',
-          category: data.category?.id || 0,
+          price: Number(data.price || 0),
+          condition: (data.condition as 'new' | 'used' | 'refurbished') || 'new',
+          category: (data.category && typeof data.category === 'object') ? (data.category as any).id : Number(data.category || 0),
           city: data.city || '',
-          address: (data as any).address || (data as any).location || '',
+          address: data.address || (data as any).location || '',
           listing_type: 'sale' as const,
-          delivery_is_free: data.delivery_is_free !== false,
-          delivery_fee: Number(data.delivery_fee ?? 0) || 0,
-          track_inventory: (data as any).track_inventory ?? false,
-          stock_quantity: data.stock_quantity ?? 0,
-          low_stock_threshold: (data as any).low_stock_threshold ?? 5,
-          allow_backorders: (data as any).allow_backorders ?? false,
+          delivery_is_free: data.delivery_is_free ?? true,
+          delivery_fee: Number(data.delivery_fee ?? 0),
+          track_inventory: Boolean(data.track_inventory),
+          stock_quantity: Number(data.stock_quantity ?? 0),
+          low_stock_threshold: Number(data.low_stock_threshold ?? 5),
+          allow_backorders: Boolean(data.allow_backorders),
         });
 
         setSpecs(((data as any).specs && typeof (data as any).specs === 'object') ? ((data as any).specs as Record<string, unknown>) : {});
@@ -253,6 +255,10 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
     void loadFields();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedCategoryId]);
+
+  const setSpecValue = (key: string, val: unknown) => {
+    setSpecs((prev) => ({ ...prev, [key]: val }));
+  };
 
   // ─── Load categories ──────────────────────────────────────────────────────
   useEffect(() => {
@@ -663,74 +669,149 @@ export function SellerListingEditPage({ listingId }: { listingId: string }) {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex items-start gap-3 rounded-xl border bg-muted/20 p-4">
-                  <Checkbox
-                    id="track_inventory"
-                    checked={form.watch('track_inventory')}
-                    onCheckedChange={(c) => form.setValue('track_inventory', c === true)}
-                    className="mt-0.5"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <Label htmlFor="track_inventory" className="cursor-pointer font-medium">
-                      Track inventory for this item
-                    </Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Enable this to manage stock levels and prevent overselling.
-                    </p>
-                  </div>
-                </div>
-
-                {form.watch('track_inventory') && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: 'auto' }}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4"
-                  >
-                    <div className="space-y-2">
-                      <Label htmlFor="stock_quantity">Current Stock *</Label>
-                      <Input
-                        id="stock_quantity"
-                        type="number"
-                        min={0}
-                        {...form.register('stock_quantity', { valueAsNumber: true })}
-                        className={form.formState.errors.stock_quantity ? 'border-destructive' : ''}
+                <div className={`transition-all duration-300 rounded-2xl border p-5 ${
+                  form.watch('track_inventory') 
+                    ? 'bg-primary/5 border-primary/20 shadow-inner' 
+                    : 'bg-muted/20 border-dashed border-muted-foreground/30'
+                }`}>
+                  <div className="flex items-start gap-4">
+                    <div className="pt-1">
+                      <Checkbox
+                        id="track_inventory"
+                        checked={form.watch('track_inventory')}
+                        onCheckedChange={(c) => form.setValue('track_inventory', c === true)}
+                        className="h-5 w-5 rounded-md"
                       />
-                      {form.formState.errors.stock_quantity && (
-                        <p className="text-xs text-destructive">{form.formState.errors.stock_quantity.message}</p>
-                      )}
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="low_stock_threshold">Low Stock Alert Level</Label>
-                      <Input
-                        id="low_stock_threshold"
-                        type="number"
-                        min={0}
-                        {...form.register('low_stock_threshold', { valueAsNumber: true })}
-                        className={form.formState.errors.low_stock_threshold ? 'border-destructive' : ''}
-                      />
-                      <p className="text-[10px] text-muted-foreground">
-                        We'll notify you when stock falls below this level.
+                    <div className="flex-1 min-w-0">
+                      <Label htmlFor="track_inventory" className="cursor-pointer font-semibold text-base">
+                        Inventory Tracking
+                      </Label>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Enable this to manage stock levels and prevent customers from ordering more than you have.
                       </p>
                     </div>
+                  </div>
 
-                    <div className="flex items-start gap-3 col-span-full pt-2">
-                      <Checkbox
-                        id="allow_backorders"
-                        checked={form.watch('allow_backorders')}
-                        onCheckedChange={(c) => form.setValue('allow_backorders', c === true)}
-                        className="mt-0.5"
-                      />
-                      <div>
-                        <Label htmlFor="allow_backorders" className="cursor-pointer font-medium">
-                          Allow backorders
-                        </Label>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Customers can still purchase this item even if it's out of stock.
-                        </p>
+                  {form.watch('track_inventory') && (
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      className="mt-6 space-y-6 pt-6 border-t border-primary/10"
+                    >
+                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                        <div className="space-y-1">
+                          <Label htmlFor="stock_quantity" className="text-sm font-medium">Available Units</Label>
+                          <div className="flex items-center gap-2">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold uppercase tracking-wider ${
+                              (form.watch('stock_quantity') || 0) <= (form.watch('low_stock_threshold') || 0)
+                                ? 'bg-amber-100 text-amber-700 border border-amber-200'
+                                : 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                            }`}>
+                              {(form.watch('stock_quantity') || 0) <= 0 
+                                ? 'Out of Stock' 
+                                : (form.watch('stock_quantity') || 0) <= (form.watch('low_stock_threshold') || 0) 
+                                  ? 'Low Stock Alert' 
+                                  : 'Stock Healthy'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Premium Stock Controller */}
+                        <div className="flex items-center gap-4 bg-background border rounded-2xl p-2 shadow-sm">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-12 w-12 rounded-xl hover:bg-muted"
+                            onClick={() => {
+                              const curr = form.getValues('stock_quantity') || 0;
+                              form.setValue('stock_quantity', Math.max(0, curr - 1));
+                            }}
+                          >
+                            <Minus className="w-5 h-5" />
+                          </Button>
+                          
+                          <div className="w-20">
+                            <Input
+                              id="stock_quantity"
+                              type="number"
+                              className="text-2xl font-black bg-transparent border-0 text-center focus-visible:ring-0 appearance-none h-12"
+                              {...form.register('stock_quantity', { valueAsNumber: true })}
+                            />
+                          </div>
+
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-12 w-12 rounded-xl hover:bg-muted text-primary"
+                            onClick={() => {
+                              const curr = form.getValues('stock_quantity') || 0;
+                              form.setValue('stock_quantity', curr + 1);
+                            }}
+                          >
+                            <Plus className="w-5 h-5 font-bold" />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                  </motion.div>
-                )}
+
+                      {/* Power Increments */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {[1, 5, 10, 50].map((val) => (
+                          <Button
+                            key={val}
+                            type="button"
+                            variant="outline"
+                            className="h-10 rounded-xl font-bold border-muted-foreground/20 hover:border-primary hover:text-primary transition-all bg-background/50"
+                            onClick={() => {
+                              const curr = form.getValues('stock_quantity') || 0;
+                              form.setValue('stock_quantity', curr + val);
+                            }}
+                          >
+                            +{val}
+                          </Button>
+                        ))}
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-4">
+                        <div className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <Label htmlFor="low_stock_threshold" className="text-sm font-medium">Low Stock Threshold</Label>
+                            <span className="text-xs font-bold text-primary">{form.watch('low_stock_threshold')} units</span>
+                          </div>
+                          <Input
+                            id="low_stock_threshold"
+                            type="number"
+                            min={0}
+                            {...form.register('low_stock_threshold', { valueAsNumber: true })}
+                            className="h-11 rounded-xl bg-background border-muted-foreground/20"
+                          />
+                          <p className="text-[11px] text-muted-foreground leading-relaxed">
+                            We'll flag this item as "Low Stock" in your dashboard when it drops below this number.
+                          </p>
+                        </div>
+
+                        <div className="flex items-start gap-3 p-4 rounded-xl border bg-background/50 h-fit self-end">
+                          <Checkbox
+                            id="allow_backorders"
+                            checked={form.watch('allow_backorders')}
+                            onCheckedChange={(c) => form.setValue('allow_backorders', c === true)}
+                            className="mt-0.5"
+                          />
+                          <div className="space-y-1">
+                            <Label htmlFor="allow_backorders" className="cursor-pointer font-medium text-sm">
+                              Allow Backorders
+                            </Label>
+                            <p className="text-[11px] text-muted-foreground leading-tight">
+                              Allow customers to buy this item even when it's out of stock.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </motion.div>

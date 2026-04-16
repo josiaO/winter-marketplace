@@ -26,6 +26,9 @@ export const metadata: Metadata = {
     siteName: "SmartDalali",
     type: "website",
   },
+  icons: {
+    icon: '/favicon.svg',
+  },
 };
 
 export default function RootLayout({

@@ -18,10 +18,10 @@ from .transaction import Transaction, TransactionSource
 from .audit import TransactionLog
 from .payout import Payout, PayoutDestination
 from .dispute import Dispute, DisputeEvidence
+from ..state_machine import TransactionStatus, DisputeStatus, DisputeResolution
 from .payment_record import PaymentRecord
 from .payment_link import PaymentLink
 from .gateway_event import GatewayEvent
-from ..state_machine import TransactionStatus
 
 __all__ = [
     'APIKey',
@@ -34,6 +34,8 @@ __all__ = [
     'Payout',
     'PayoutDestination',
     'Dispute',
+    'DisputeStatus',
+    'DisputeResolution',
     'DisputeEvidence',
     'PaymentRecord',
     'PaymentLink',

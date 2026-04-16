@@ -39,10 +39,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api } from '@/lib/api-client';
+import { api, ApiClientError } from '@/lib/api-client';
 import { useAuthStore } from '@/store';
 import { routes } from '@/lib/routes';
-import { ApiClientError } from '@/types/api';
 
 // ─── Schema ────────────────────────────────────────────────────────────────────
 
@@ -509,6 +508,7 @@ export function SellerSettingsView() {
                   <Link 
                     href={user.seller_profile?.store_slug ? routes.storeView(user.seller_profile.store_slug) : routes.home()} 
                     target="_blank"
+                    rel="noopener noreferrer"
                   >
                     View Store
                     <ArrowRight className="w-4 h-4" />

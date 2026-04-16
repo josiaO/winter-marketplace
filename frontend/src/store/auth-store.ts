@@ -11,7 +11,6 @@ interface AuthState {
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  accessToken: string | null;
   isHydrated: boolean;
 }
 
@@ -47,7 +46,6 @@ export const useAuthStore = create<AuthStore>()(
       user: null,
       isAuthenticated: false,
       isLoading: false,
-      accessToken: null,
       isHydrated: false,
 
       // ── Actions ────────────────────────────────────────────────────────────
@@ -56,20 +54,15 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
         try {
           const res = await api.auth.login({ email, password });
-          // Save tokens via ApiClient
+          
+          // Save tokens via ApiClient (memory-only in browser, cookies set by proxy)
           api.setTokens(res.access, res.refresh);
           
-          // Set initial user info from login response ASAP
           set({
             user: res.user,
             isAuthenticated: true,
-            accessToken: res.access,
           });
 
-          // Fetch full profile in background but don't block the login flow
-          // unless necessary. Actually, we'll fetch it now but only await it 
-          // if we want to be 100% sure. For better UX, we'll update the store
-          // whenever it arrives.
           void get().fetchUser();
         } finally {
           set({ isLoading: false });
@@ -80,14 +73,15 @@ export const useAuthStore = create<AuthStore>()(
         set({ isLoading: true });
         try {
           const res = await api.auth.register(payload);
-          if (res.access && res.refresh) {
-            api.setTokens(res.access, res.refresh);
+          // Backend doesn't return tokens on registration; user must verify or login
+          // We don't set user or isAuthenticated here unless tokens were provided
+          if ('access' in res && (res as any).access) {
+            api.setTokens((res as any).access, (res as any).refresh);
+            set({
+              user: (res as any).user,
+              isAuthenticated: true,
+            });
           }
-          set({
-            user: res.user,
-            isAuthenticated: true,
-            accessToken: res.access || null,
-          });
         } finally {
           set({ isLoading: false });
         }
@@ -97,38 +91,30 @@ export const useAuthStore = create<AuthStore>()(
         try {
           await api.auth.logout();
         } catch {
-          // Even if the API call fails, clear all local state
+          // even if call fails
         }
+        api.setTokens('', ''); // Clear in-memory tokens
         set({
           user: null,
           isAuthenticated: false,
-          accessToken: null,
         });
       },
 
       fetchUser: async () => {
-        // If we don't even have a token, we aren't authenticated locally.
-        if (!api.isAuthenticated()) {
-          set({ user: null, isAuthenticated: false, accessToken: null, isLoading: false });
-          return;
-        }
-
         set({ isLoading: true });
         try {
           const user = await api.auth.me();
           set({
             user,
             isAuthenticated: true,
-            accessToken: api.getAccessToken(),
             isLoading: false,
           });
         } catch (error) {
-          console.error('Profile sync failed:', error);
-          // If profile fetch fails with 401, it means tokens are invalid.
+          // If profile fetch fails, we are definitely not logged in or token is bad
+          set({ user: null, isAuthenticated: false, isLoading: false });
           if (api.isUnauthorized(error)) {
-            await get().logout();
+            api.setTokens('', '');
           }
-          set({ isLoading: false });
         }
       },
 
@@ -137,12 +123,7 @@ export const useAuthStore = create<AuthStore>()(
         try {
           const res = await api.auth.becomeSeller();
           api.setTokens(res.access, res.refresh);
-          const fullUser = (await api.auth.me()) as User;
-          set({
-            user: fullUser,
-            isAuthenticated: true,
-            accessToken: res.access,
-          });
+          await get().fetchUser();
         } finally {
           set({ isLoading: false });
         }
@@ -174,23 +155,11 @@ export const useAuthStore = create<AuthStore>()(
       // After Zustand rehydrates from storage, check if the ApiClient still
       // has valid tokens.  If so, hydrate the user from the backend.
       onRehydrateStorage: () => {
-        return (state, error) => {
-          if (error || !state) {
-            setTimeout(() => useAuthStore.setState({ isHydrated: true }), 0);
-            return;
-          }
-
-          // If we are authenticated, refresh the user in the background
-          if (api.isAuthenticated()) {
-            state.setHydrated();
-            
-            // Background fetch to ensure data is fresh
-            queueMicrotask(() => {
-              void state.fetchUser();
-            });
-          } else {
-            state.setHydrated();
-          }
+        return (state) => {
+          if (!state) return;
+          state.setHydrated();
+          // Always try to fetch the user on load to verify cookie auth
+          void state.fetchUser();
         };
       },
     }

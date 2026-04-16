@@ -206,36 +206,38 @@ export function LoginPage() {
           </CardFooter>
         </Card>
 
-        {/* Demo Accounts */}
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3, duration: 0.3 }}
-        >
-          <Card className="mt-6 border-dashed bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
-            <CardContent className="p-4">
-              <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-2">
-                Demo Accounts
-              </p>
-              <div className="space-y-2 text-xs text-muted-foreground">
-                <div className="flex items-start gap-2">
-                  <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
-                  <div>
-                    <span className="font-medium text-foreground">Seller:</span>{' '}
-                    hassan.seller@email.com / password123
+        {/* Demo Accounts (Dev only) */}
+        {process.env.NODE_ENV === 'development' && (
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3, duration: 0.3 }}
+          >
+            <Card className="mt-6 border-dashed bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800">
+              <CardContent className="p-4">
+                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400 mb-2">
+                  Demo Accounts
+                </p>
+                <div className="space-y-2 text-xs text-muted-foreground">
+                  <div className="flex items-start gap-2">
+                    <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
+                    <div>
+                      <span className="font-medium text-foreground">Seller:</span>{' '}
+                      hassan.seller@email.com / password123
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
+                    <div>
+                      <span className="font-medium text-foreground">Buyer:</span>{' '}
+                      juma.buyer@email.com / password123
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-start gap-2">
-                  <span className="inline-block w-1.5 h-1.5 bg-emerald-500 rounded-full mt-1.5 shrink-0" />
-                  <div>
-                    <span className="font-medium text-foreground">Buyer:</span>{' '}
-                    juma.buyer@email.com / password123
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
       </motion.div>
     </div>
   );

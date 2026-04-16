@@ -43,11 +43,11 @@ export function CartPage() {
   const { cart, setCart } = useCartStore();
   const [serverCartTotal, setServerCartTotal] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
-  const [isRemoving, setIsRemoving] = useState<string | null>(null);
+  const [isRemoving, setIsRemoving] = useState<number | string | null>(null);
   const [removeDialogOpen, setRemoveDialogOpen] = useState(false);
-  const [itemToRemove, setItemToRemove] = useState<string | null>(null);
+  const [itemToRemove, setItemToRemove] = useState<number | string | null>(null);
   const [quantityBusyByLine, setQuantityBusyByLine] = useState<
-    Record<string, boolean>
+    Record<string | number, boolean>
   >({});
   const queueRef = useRef<Promise<void>>(Promise.resolve());
   const debounceRef = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -104,7 +104,7 @@ export function CartPage() {
   }, []);
 
   const handleUpdateQuantity = useCallback(
-    (cartItemId: string, listingId: string, newQuantity: number) => {
+    (cartItemId: number | string, listingId: number | string, newQuantity: number) => {
       if (!isAuthenticated) return;
 
       // Optimistically update the store if possible, 
@@ -251,11 +251,10 @@ export function CartPage() {
                       router.push(routes.product(String(item.listing.id)))
                     }
                   >
-                    {item.listing.images?.[0]?.url || item.listing.image ? (
+                    {item.listing.images?.[0]?.image ? (
                       <Image
                         src={
-                          item.listing.images?.[0]?.url ||
-                          item.listing.image ||
+                          item.listing.images?.[0]?.image ||
                           ''
                         }
                         alt={item.listing.title}
@@ -296,7 +295,7 @@ export function CartPage() {
                           onClick={() =>
                             handleUpdateQuantity(
                               item.id,
-                              item.listingId,
+                              item.listing_id,
                               Math.max(1, item.quantity - 1),
                             )
                           }
@@ -314,15 +313,15 @@ export function CartPage() {
                           onClick={() =>
                             handleUpdateQuantity(
                               item.id,
-                              item.listingId,
+                              item.listing_id,
                               Math.min(
-                                item.listing.stockQuantity,
+                                item.listing.stock_quantity ?? 0,
                                 item.quantity + 1,
                               ),
                             )
                           }
                           disabled={
-                            item.quantity >= item.listing.stockQuantity ||
+                            item.quantity >= (item.listing.stock_quantity || 0) ||
                             qtyBusy
                           }
                         >
@@ -333,7 +332,7 @@ export function CartPage() {
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-semibold text-foreground hidden sm:inline">
                           {formatTZS(
-                            item.lineSubtotal ??
+                            item.subtotal ??
                               item.listing.price * item.quantity,
                           )}
                         </span>

@@ -15,11 +15,22 @@ import {
   MessageSquare,
   Loader2,
   CheckCircle2,
+  Store,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -96,7 +107,7 @@ export function SellerProfilePage({ sellerId }: { sellerId: string }) {
     if (!sellerId) return;
     try {
       const conv = await api.communications.startConversation({ seller_id: sellerId });
-      router.push(routes.conversation(String(conv.id)));
+      router.push(routes.messageThread(String(conv.id)));
     } catch {
       toast.error('Failed to start conversation');
     }

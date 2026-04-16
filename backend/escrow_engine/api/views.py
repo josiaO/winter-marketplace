@@ -1,3 +1,43 @@
+"""
+escrow_engine.api.views
+-----------------------
+⏭  SKIP THIS FILE — Developer API (external X-Api-Key product)
+══════════════════════════════════════════════════════════════════════════════
+
+This file is NOT part of the in-app SmartDalali escrow flow.
+
+PURPOSE
+-------
+This package (escrow_engine/api/) implements a standalone Developer API that
+allows THIRD-PARTY INTEGRATORS to interact with the escrow engine using a
+static X-Api-Key header. It is a separate product from the marketplace itself.
+
+WHAT IT DOES
+------------
+  - TransactionViewSet   — create/list/pay/release/refund txns via API key
+  - DisputeViewSet       — open/list disputes for API-key-owned transactions
+  - RotateDeveloperAPIKeyView — rotate an API key and receive a new secret
+
+AUTH
+----
+  Authentication : escrow_engine.api.authentication.APIKeyAuthentication
+  Permissions   : escrow_engine.api.permissions.HasEscrowAPIKey / EscrowAPIKeyScopes
+  Throttling    : escrow_engine.api.throttling.EscrowDeveloperAPIKeyThrottle
+
+URLS
+----
+  Mounted under: /api/v1/escrow/dev/
+    /dev/transactions/
+    /dev/transactions/{reference}/pay/
+    /dev/transactions/{reference}/release/
+    /dev/transactions/{reference}/refund/
+    /dev/disputes/
+    /dev/keys/rotate/
+
+⚠️  DO NOT EDIT unless you are working specifically on the Developer API product.
+    To work on in-app escrow: go to escrow_engine/views.py instead.
+══════════════════════════════════════════════════════════════════════════════
+"""
 import secrets
 
 from django.shortcuts import get_object_or_404

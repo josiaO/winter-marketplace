@@ -131,7 +131,6 @@ export function OtpVerifyPage() {
         useAuthStore.setState({
           user: profile,
           isAuthenticated: true,
-          accessToken: api.getAccessToken(),
         });
       } catch {
         toast.error('Verified, but we could not load your profile. Try signing in.');
