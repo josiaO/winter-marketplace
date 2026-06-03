@@ -103,9 +103,10 @@ class CategoryViewSet(viewsets.ModelViewSet):
             
             for cat in all_categories:
                 serialized = category_map[cat.id]
-                if cat.parent_id:
-                    if cat.parent_id in category_map:
-                        category_map[cat.parent_id]['children'].append(serialized)
+                parent_id = cat.parent_id
+                # Attach under a valid parent; promote orphans (self-ref, missing parent) to root
+                if parent_id and parent_id != cat.id and parent_id in category_map:
+                    category_map[parent_id]['children'].append(serialized)
                 else:
                     tree.append(serialized)
             
@@ -151,10 +152,14 @@ class CategoryViewSet(viewsets.ModelViewSet):
     
     def update(self, request, *args, **kwargs):
         response = super().update(request, *args, **kwargs)
-        slug = self.kwargs.get(self.lookup_field)
-        category = Category.objects.filter(slug=slug).first()
-        if category:
-            CatalogService.invalidate_category_detail_cache(category)
+        instance = self.get_object()
+        CatalogService.invalidate_category_detail_cache(instance)
+        return response
+
+    def partial_update(self, request, *args, **kwargs):
+        response = super().partial_update(request, *args, **kwargs)
+        instance = self.get_object()
+        CatalogService.invalidate_category_detail_cache(instance)
         return response
     
     def destroy(self, request, *args, **kwargs):

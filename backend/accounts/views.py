@@ -637,12 +637,9 @@ class PasswordResetView(APIView):
                     uid = urlsafe_base64_encode(force_bytes(user.pk))
                     token = default_token_generator.make_token(user)
 
-                    frontend_url = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
-                    reset_link = f"{frontend_url}/reset-password/{uid}/{token}"
-
                     try:
                         from .tasks import send_password_reset_email_task
-                        send_password_reset_email_task.delay(user.id, reset_link)
+                        send_password_reset_email_task.delay(user.id, uid, token)
                     except Exception as e:
                         logger.error(f"Failed to enqueue password reset email task for {user.email}: {e}")
 
@@ -667,7 +664,7 @@ class PasswordResetConfirmView(APIView):
         uidb64 = request.data.get('uid')
         token = request.data.get('token')
         password = request.data.get('new_password')
-        re_password = request.data.get('re_new_password')
+        re_password = request.data.get('re_new_password') or request.data.get('confirm_password')
 
         if not all([uidb64, token, password, re_password]):
             return Response({'error': 'All fields are required'}, status=status.HTTP_400_BAD_REQUEST)

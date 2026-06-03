@@ -257,7 +257,7 @@ ACCOUNT_UNIQUE_EMAIL = True
 ACCOUNT_EMAIL_VERIFICATION = os.getenv('ACCOUNT_EMAIL_VERIFICATION', 'mandatory')
 SOCIALACCOUNT_QUERY_EMAIL = True
 SOCIALACCOUNT_EMAIL_VERIFICATION = os.getenv('SOCIALACCOUNT_EMAIL_VERIFICATION', 'optional')
-
+ACCOUNT_EMAIL_REQUIRED = True
 # Redirect after login (you can change this to your frontend URL)
 LOGIN_REDIRECT_URL = os.getenv('LOGIN_REDIRECT_URL', '/')
 
@@ -465,7 +465,7 @@ SELLER_DASHBOARD_POLLING_INTERVAL = int(os.getenv('SELLER_DASHBOARD_POLLING_INTE
 BUYER_DASHBOARD_POLLING_INTERVAL = int(os.getenv('BUYER_DASHBOARD_POLLING_INTERVAL', '30000'))
 
 # Frontend URL used in activation emails and links
-FRONTEND_URL = os.getenv('FRONTEND_URL')
+FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://localhost:3000')
 
 # Marketplace: require admin-approved identity before items become public (progressive onboarding).
 # Set MARKETPLACE_PUBLISH_REQUIRES_IDENTITY_VERIFICATION=false for local/demo without verification flows.

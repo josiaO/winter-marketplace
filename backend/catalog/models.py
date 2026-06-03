@@ -39,6 +39,26 @@ class Category(BaseModel):
         """Returns True if this category has no subcategories."""
         return not self.children.exists()
 
+    def clean(self):
+        """Validate parent hierarchy (no self-reference or cycles)."""
+        super().clean()
+        if self.parent_id is None:
+            return
+        if self.pk and self.parent_id == self.pk:
+            raise ValidationError({'parent': 'A category cannot be its own parent.'})
+        # Walk ancestors to detect cycles
+        seen = {self.pk} if self.pk else set()
+        current_id = self.parent_id
+        while current_id is not None:
+            if current_id in seen:
+                raise ValidationError({'parent': 'Circular parent chain is not allowed.'})
+            seen.add(current_id)
+            current_id = (
+                Category.objects.filter(pk=current_id)
+                .values_list('parent_id', flat=True)
+                .first()
+            )
+
     class Meta:
         verbose_name_plural = "Categories"
         ordering = ['vertical', 'order', 'name']

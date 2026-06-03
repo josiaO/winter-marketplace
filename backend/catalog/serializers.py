@@ -199,6 +199,14 @@ class CategorySerializer(serializers.ModelSerializer):
         parent = data.get('parent')
         vertical = data.get('vertical')
 
+        if parent is not None:
+            parent_id = parent.pk if hasattr(parent, 'pk') else parent
+            instance_id = self.instance.pk if self.instance else None
+            if instance_id and parent_id == instance_id:
+                raise serializers.ValidationError(
+                    {'parent': 'A category cannot be its own parent.'}
+                )
+
         # If creating a subcategory, inherit vertical from parent
         if parent and not vertical:
             # Parent might be an integer ID or a Category instance

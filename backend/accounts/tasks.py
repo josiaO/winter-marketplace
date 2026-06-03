@@ -1,10 +1,17 @@
 import logging
+from urllib.parse import urlencode
 from celery import shared_task
 from django.core.mail import send_mail
 from django.conf import settings
 from django.contrib.auth.models import User
 
 logger = logging.getLogger(__name__)
+
+
+def build_password_reset_link(uid: str, token: str) -> str:
+    """Build frontend reset URL using current FRONTEND_URL at send time."""
+    frontend_url = (getattr(settings, 'FRONTEND_URL', None) or 'http://localhost:3000').rstrip('/')
+    return f"{frontend_url}/reset-password?{urlencode({'uid': uid, 'token': token})}"
 
 @shared_task(bind=True, max_retries=3, autoretry_for=(Exception,), retry_backoff=60)
 def send_welcome_email(self, user_id):
@@ -43,10 +50,11 @@ def send_activation_email_task(self, user_id):
         raise
 
 @shared_task(bind=True, max_retries=3, autoretry_for=(Exception,), retry_backoff=60)
-def send_password_reset_email_task(self, user_id, reset_link):
+def send_password_reset_email_task(self, user_id, uid, token):
     """Sends a password reset email asynchronously."""
     try:
         user = User.objects.get(id=user_id)
+        reset_link = build_password_reset_link(uid, token)
         subject = "Password Reset Request"
         message = f"Click the link below to reset your password:\n{reset_link}\n\nIf you didn't request this, please ignore this email."
         

@@ -85,6 +85,8 @@ type CategoryFieldRow = {
   order?: number;
 };
 
+const NO_PARENT = '__none__';
+
 function slugify(s: string): string {
   return s
     .toLowerCase()
@@ -96,13 +98,14 @@ function slugify(s: string): string {
 
 function flattenTree(cats: CategoryRow[]): Array<{ id: number; name: string; depth: number; parent: number | null }> {
   const out: Array<{ id: number; name: string; depth: number; parent: number | null }> = [];
-  const walk = (rows: CategoryRow[], depth: number) => {
+  const walk = (rows: CategoryRow[], depth: number, parentId: number | null) => {
     for (const r of rows) {
-      out.push({ id: r.id, name: r.name, depth, parent: (r.parent ?? null) as number | null });
-      if (Array.isArray(r.children) && r.children.length) walk(r.children, depth + 1);
+      const parent = depth > 0 ? ((r.parent ?? parentId) as number | null) : null;
+      out.push({ id: r.id, name: r.name, depth, parent });
+      if (Array.isArray(r.children) && r.children.length) walk(r.children, depth + 1, r.id);
     }
   };
-  walk(cats, 0);
+  walk(cats, 0, null);
   return out;
 }
 
@@ -156,7 +159,7 @@ export function AdminCatalogPage() {
 
   // Delete alert state
   const [deleteCatDialogOpen, setDeleteCatDialogOpen] = useState(false);
-  const [catToDelete, setCatToDelete] = useState<CategoryRow | null>(null);
+  const [catToDelete, setCatToDelete] = useState<{ id: number; name: string } | null>(null);
   const [deleteFieldDialogOpen, setDeleteFieldDialogOpen] = useState(false);
   const [fieldToDelete, setFieldToDelete] = useState<CategoryFieldRow | null>(null);
 
@@ -216,7 +219,7 @@ export function AdminCatalogPage() {
       id: 0,
       name: '',
       slug: '',
-      parent: '',
+      parent: NO_PARENT,
       description: '',
       icon: '',
       is_active: true,
@@ -250,7 +253,7 @@ export function AdminCatalogPage() {
       id: node.id,
       name: node.name || '',
       slug: node.slug || '',
-      parent: node.parent ? String(node.parent) : '',
+      parent: node.parent ? String(node.parent) : NO_PARENT,
       description: (node.description as any) || '',
       icon: (node.icon as any) || '',
       is_active: node.is_active !== false,
@@ -283,7 +286,9 @@ export function AdminCatalogPage() {
         is_service: Boolean(catForm.is_service),
         is_physical: Boolean(catForm.is_physical),
         order: Number(catForm.order || 0),
-        ...(catForm.parent ? { parent: Number(catForm.parent) } : { parent: null }),
+        ...(catForm.parent && catForm.parent !== NO_PARENT
+          ? { parent: Number(catForm.parent) }
+          : { parent: null }),
       };
       if (catMode === 'create') {
         await api.catalog.createCategory(payload as any);
@@ -617,12 +622,15 @@ export function AdminCatalogPage() {
 
             <div className="space-y-2">
               <Label>Parent (optional)</Label>
-              <Select value={catForm.parent} onValueChange={(v) => setCatForm((p) => ({ ...p, parent: v }))}>
+              <Select
+                value={catForm.parent || NO_PARENT}
+                onValueChange={(v) => setCatForm((p) => ({ ...p, parent: v }))}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="No parent (root category)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">No parent (root category)</SelectItem>
+                  <SelectItem value={NO_PARENT}>No parent (root category)</SelectItem>
                   {flatCats.map((c) => (
                     <SelectItem key={c.id} value={String(c.id)}>
                       {'\u00A0\u00A0'.repeat(c.depth)}

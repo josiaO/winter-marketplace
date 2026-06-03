@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import Category, CategoryField
+from .services import CatalogService
 
 
 class CategoryFieldInline(admin.TabularInline):
@@ -64,6 +65,15 @@ class CategoryAdmin(admin.ModelAdmin):
     )
 
     inlines = [CategoryFieldInline]
+
+    def save_model(self, request, obj, form, change):
+        obj.full_clean()
+        super().save_model(request, obj, form, change)
+        CatalogService.invalidate_category_detail_cache(obj)
+
+    def delete_model(self, request, obj):
+        CatalogService.invalidate_category_detail_cache(obj)
+        super().delete_model(request, obj)
 
     def get_inline_instances(self, request, obj=None):
         """Only show CategoryFieldInline for subcategories."""

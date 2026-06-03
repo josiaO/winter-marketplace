@@ -79,7 +79,7 @@ class AccountService:
 
         try:
             profile = user.profile
-            frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:5173')
+            frontend = getattr(settings, 'FRONTEND_URL', 'http://localhost:3000')
             activation_link = f"{frontend}/activate?username={user.username}&code={profile.code}"
 
             subject = 'Activate Your SmartDalali Account'
